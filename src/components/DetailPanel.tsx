@@ -103,6 +103,7 @@ function DetailBody({
 	const done = item.state === 'done';
 	const followable = item.category === 'followup' || item.category === 'poc';
 	const activePocs = pocs.filter((p) => p.status === 'active' || p.status === 'paused');
+	const pocCompany = pocs.find((p) => p.id === item.poc_id)?.company ?? null;
 
 	const addNote = async () => {
 		if (!noteText.trim()) return;
@@ -286,7 +287,18 @@ function DetailBody({
 						<ReminderPicker value={item.remind_at} dueDate={item.due_date} onChange={(v) => save({ remind_at: v })} />
 					</Row>
 					<Row icon={<Building2 />} label="Empresa">
-						<input {...company} list="zd-companies" placeholder="Añadir empresa" className={fieldClass} />
+						<div className="group/company flex items-center">
+							<input {...company} list="zd-companies" placeholder="Añadir empresa" className={fieldClass} />
+							{(item.company ?? item.poc_name) && (
+								<button
+									type="button"
+									onClick={() => go({ kind: 'account', name: item.company ?? pocCompany ?? item.poc_name! })}
+									className="ml-1 hidden h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-[11.5px] font-medium text-accent-text group-hover/company:inline-flex hover:bg-accent-soft"
+								>
+									Ver cuenta <ArrowRight className="size-3" />
+								</button>
+							)}
+						</div>
 					</Row>
 					<Row icon={<User />} label="Contacto">
 						<input {...contact} list="zd-contacts" placeholder="Añadir contacto" className={fieldClass} />

@@ -23,9 +23,11 @@ import { Sidebar, type DropTarget } from './components/Sidebar';
 import { zd } from './lib/bridge';
 import { useItemOps } from './lib/ops';
 import { useUI, type View } from './lib/store';
+import { AccountsView, AccountView } from './views/AccountViews';
 import { FollowUpsView, TasksView, TodayView, TrashView, UpcomingView } from './views/ListViews';
 import { NewPocDialog, PocsView, PocView } from './views/PocViews';
 import { SettingsView } from './views/SettingsView';
+import { StatsView } from './views/StatsView';
 import { WeeksView } from './views/WeeksView';
 
 const NAV: View[] = [
@@ -34,10 +36,12 @@ const NAV: View[] = [
 	{ kind: 'followups' },
 	{ kind: 'tasks' },
 	{ kind: 'pocs' },
+	{ kind: 'accounts' },
+	{ kind: 'stats' },
 	{ kind: 'weeks' },
 	{ kind: 'trash' },
 ];
-const COMPOSER_VIEWS = new Set(['today', 'upcoming', 'followups', 'tasks', 'poc']);
+const COMPOSER_VIEWS = new Set(['today', 'upcoming', 'followups', 'tasks', 'poc', 'account']);
 
 function CurrentView({ view }: { view: View }) {
 	switch (view.kind) {
@@ -53,6 +57,12 @@ function CurrentView({ view }: { view: View }) {
 			return <PocsView />;
 		case 'poc':
 			return <PocView key={view.id} id={view.id} />;
+		case 'accounts':
+			return <AccountsView />;
+		case 'account':
+			return <AccountView key={view.name} name={view.name} />;
+		case 'stats':
+			return <StatsView />;
 		case 'weeks':
 			return <WeeksView week={view.week} />;
 		case 'trash':
@@ -132,7 +142,7 @@ export function App() {
 				st.go({ kind: 'settings' });
 				return;
 			}
-			if (meta && /^[1-7]$/.test(e.key)) {
+			if (meta && /^[1-9]$/.test(e.key)) {
 				e.preventDefault();
 				st.go(NAV[Number(e.key) - 1]);
 				return;

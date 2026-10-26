@@ -1,4 +1,4 @@
-import { AlarmClock, CalendarDays, Coffee, Hand, Hourglass, Inbox, PartyPopper, RotateCcw, Send, SquareCheckBig, Star, Sun, Trash2 } from 'lucide-react';
+import { AlarmClock, CalendarDays, CircleDashed, Coffee, Hand, Hourglass, Inbox, PartyPopper, RotateCcw, Send, SquareCheckBig, Star, Sun, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { addDays, daysBetween } from '../../shared/dates.js';
 import { useActions, useItems, useToday } from '../api/hooks';
@@ -19,7 +19,8 @@ export function TodayView() {
 	const overdue = items.filter((i) => !chase.includes(i) && i.due_date && i.due_date < today);
 	const now = items.filter((i) => !chase.includes(i) && i.due_date === today);
 	const flagged = items.filter((i) => !chase.includes(i) && !overdue.includes(i) && !now.includes(i));
-	useListIds([...chase, ...overdue, ...now, ...flagged].map((i) => i.id));
+	const undated = data?.undated ?? [];
+	useListIds([...chase, ...overdue, ...now, ...flagged, ...undated].map((i) => i.id));
 	const opts = { showPoc: true, showCategory: true, sortable: false, listKey: 'today' };
 
 	return (
@@ -32,11 +33,11 @@ export function TodayView() {
 			/>
 			<ViewBody>
 				<Composer defaults={{ category: 'task', due_date: today }} placeholder="Añadir para hoy… (prueba «FUP Catalina BCI #fup»)" />
-				{!isLoading && !items.length && (
+				{!isLoading && !items.length && !undated.length && (
 					<EmptyState icon={(data?.done.length ?? 0) > 0 ? <PartyPopper /> : <Coffee />} title={(data?.done.length ?? 0) > 0 ? 'Todo hecho por hoy' : 'Nada pendiente para hoy'}>
 						{(data?.done.length ?? 0) > 0
 							? `Has completado ${plural(data!.done.length, 'tarea', 'tareas')} hoy.`
-							: 'Lo que tenga fecha de hoy, los follow-ups que toca perseguir y lo destacado aparecerá aquí.'}
+							: 'Aquí aparece lo que vence hoy, los follow-ups que toca perseguir, lo destacado y lo que no tiene fecha.'}
 					</EmptyState>
 				)}
 				{chase.length > 0 && (
@@ -57,6 +58,16 @@ export function TodayView() {
 				{flagged.length > 0 && (
 					<Group title="Destacadas" icon={<Star />} count={flagged.length}>
 						<TaskList items={flagged} today={today} options={opts} />
+					</Group>
+				)}
+				{undated.length > 0 && (
+					<Group
+						title="Sin fecha"
+						icon={<CircleDashed />}
+						count={undated.length}
+						right={<span className="text-[11px] text-fg-3">Ponles fecha para que salgan cuando toquen</span>}
+					>
+						<TaskList items={undated} today={today} options={opts} />
 					</Group>
 				)}
 				<DoneSection items={data?.done ?? []} today={today} title="Completadas hoy" options={opts} />

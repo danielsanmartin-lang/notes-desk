@@ -7,6 +7,9 @@ export type View =
 	| { kind: 'tasks' }
 	| { kind: 'pocs' }
 	| { kind: 'poc'; id: number }
+	| { kind: 'accounts' }
+	| { kind: 'account'; name: string }
+	| { kind: 'stats' }
 	| { kind: 'weeks'; week?: string }
 	| { kind: 'trash' }
 	| { kind: 'settings' };
@@ -71,4 +74,6 @@ export const useUI = create<UIState>((set) => ({
 }));
 
 export const sameView = (a: View, b: View) =>
-	a.kind === b.kind && (a.kind !== 'poc' || (b.kind === 'poc' && a.id === b.id));
+	a.kind === b.kind &&
+	(a.kind !== 'poc' || (b.kind === 'poc' && a.id === b.id)) &&
+	(a.kind !== 'account' || (b.kind === 'account' && a.name.toLowerCase() === b.name.toLowerCase()));

@@ -27,6 +27,16 @@
 	--teal-soft: rgb(123 233 228 / 0.28);
 	--shadow: 0 1px 2px rgb(7 14 52 / 0.06), 0 8px 24px rgb(7 14 52 / 0.08);
 	--shadow-lg: 0 2px 6px rgb(7 14 52 / 0.08), 0 24px 60px rgb(7 14 52 / 0.18);
+	/* Gráficas: paleta categórica validada (skill dataviz) y colores de estado. */
+	--series-1: #2a78d6;
+	--series-2: #eb6834;
+	--series-3: #1baf7a;
+	--status-good: #0ca30c;
+	--status-warning: #fab219;
+	--status-serious: #ec835a;
+	--status-critical: #d03b3b;
+	--grid: #ebeae6;
+	--axis: #c3c2b7;
 	color-scheme: light;
 }
 
@@ -57,6 +67,11 @@
 		--teal-soft: rgb(123 233 228 / 0.14);
 		--shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px rgb(0 0 0 / 0.3);
 		--shadow-lg: 0 2px 6px rgb(0 0 0 / 0.4), 0 24px 60px rgb(0 0 0 / 0.5);
+		--series-1: #3987e5;
+		--series-2: #d95926;
+		--series-3: #199e70;
+		--grid: rgb(232 234 250 / 0.07);
+		--axis: rgb(232 234 250 / 0.18);
 		color-scheme: dark;
 	}
 }

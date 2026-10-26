@@ -1,4 +1,5 @@
 import {
+	Building2,
 	ChevronRight,
 	Ellipsis,
 	ExternalLink,
@@ -76,7 +77,7 @@ function StatusChip({ poc, today }: { poc: Pick<Poc, 'status' | 'paused_until'>;
 	);
 }
 
-function PocCard({ poc, today }: { poc: Poc; today: string }) {
+export function PocCard({ poc, today }: { poc: Poc; today: string }) {
 	const go = useUI((s) => s.go);
 	const idle = poc.last_activity_at ? daysBetween(poc.last_activity_at.slice(0, 10), today) : null;
 	return (
@@ -577,6 +578,16 @@ export function PocView({ id }: { id: number }) {
 					</div>
 				</div>
 				<div className="mt-1 flex items-center gap-1 pl-11">
+					{poc.company && (
+						<button
+							type="button"
+							onClick={() => go({ kind: 'account', name: poc.company! })}
+							title={`Ver la cuenta ${poc.company}`}
+							className="no-drag flex size-6 items-center justify-center rounded-md text-fg-3 hover:bg-hover hover:text-accent-text"
+						>
+							<Building2 className="size-3.5" />
+						</button>
+					)}
 					<input {...company} placeholder="Empresa" className="no-drag h-6 min-w-16 rounded-md [field-sizing:content] bg-transparent px-1 text-[12.5px] text-fg-2 outline-none hover:bg-hover focus:bg-hover" />
 					<span className="text-fg-3">·</span>
 					<span>{flagEmoji(poc.country)}</span>

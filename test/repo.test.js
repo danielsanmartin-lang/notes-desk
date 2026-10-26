@@ -214,3 +214,69 @@ test('ficha de la PoC: owner, fecha de inicio y admins del cliente', () => {
 	repo.deletePoc(poc.id);
 	assert.equal(repo.search('carlos').pocs.length, 0, 'los admins se borran con la PoC');
 });
+
+test('Hoy incluye lo que no tiene fecha y te toca, también de PoCs activas', () => {
+	const poc = repo.createPoc({ name: 'Cafam', company: 'Cafam' });
+	const paused = repo.createPoc({ name: 'Corporación América' });
+	repo.createItem({ category: 'task', title: 'Sin fecha' });
+	repo.createItem({ category: 'poc', poc_id: poc.id, title: 'Kickoff' });
+	repo.createItem({ category: 'poc', poc_id: paused.id, title: 'De una PoC en pausa' });
+	repo.setPocStatus(paused.id, { status: 'paused' });
+	const waiting = repo.createItem({ category: 'followup', title: 'Esperando sin fecha' });
+	repo.touchItem(waiting.id, { next_date: null });
+	repo.createItem({ category: 'task', title: 'Con fecha', due_date: '2026-11-20' });
+	repo.createItem({ category: 'task', title: 'Destacada sin fecha', flagged: true });
+
+	const today = repo.listItems('today');
+	assert.deepEqual(today.undated.map((i) => i.title), ['Kickoff', 'Sin fecha']);
+	assert.equal(today.undated[0].poc_name, 'Cafam');
+	assert.deepEqual(today.items.map((i) => i.title), ['Destacada sin fecha'], 'lo destacado sigue en su grupo');
+	assert.equal(repo.counts().undated, 2);
+});
+
+test('cuentas: agrupa por empresa (o la de su PoC) sin distinguir mayúsculas ni acentos', () => {
+	const poc = repo.createPoc({ name: 'Confirmación PoC', company: 'Cafam' });
+	repo.addPocAdmin(poc.id, { name: 'Brigitte', email: 'b@cafam.co' });
+	repo.createItem({ category: 'poc', poc_id: poc.id, title: 'Kickoff', contact: 'Brigitte' });
+	const fup = repo.createItem({ category: 'followup', title: 'Llamar', company: 'CAFAM', contact: 'Andrés' });
+	repo.createItem({ category: 'task', title: 'Precio', company: 'Centro Cuesta Nacional' });
+	repo.touchItem(fup.id, { channel: 'call' });
+	at('2026-10-28T10:00:00');
+	repo.replyItem(fup.id, { body: 'Ok' });
+
+	const list = repo.listAccounts();
+	assert.deepEqual(list.map((a) => a.name).sort(), ['Cafam', 'Centro Cuesta Nacional']);
+	const cafam = list.find((a) => a.name === 'Cafam');
+	assert.equal(cafam.followups + cafam.poc_items, 2);
+	assert.equal(cafam.pocs.length, 1);
+
+	const detail = repo.getAccount('cafam');
+	assert.equal(detail.open.length, 2);
+	assert.deepEqual(detail.contacts.map((c) => c.name).sort(), ['Andrés', 'Brigitte']);
+	assert.equal(detail.contacts.find((c) => c.name === 'Brigitte').email, 'b@cafam.co');
+	assert.equal(detail.stats.avg_response_days, 2);
+	assert.ok(detail.activity.some((a) => a.kind === 'reply'));
+	assert.deepEqual(repo.search('cuesta').accounts, ['Centro Cuesta Nacional']);
+	assert.throws(() => repo.getAccount('nadie'), /no existe/);
+});
+
+test('estadísticas del periodo: totales, respuesta, espera y canales', () => {
+	const a = repo.createItem({ category: 'followup', title: 'BCI', company: 'BCI' });
+	const b = repo.createItem({ category: 'followup', title: 'IMQ', company: 'IMQ' });
+	repo.touchItem(a.id, { channel: 'email' });
+	repo.touchItem(b.id, { channel: 'whatsapp' });
+	repo.completeItem(repo.createItem({ category: 'task', title: 'Hecha' }).id);
+	at('2026-10-30T10:00:00');
+	repo.replyItem(a.id, {});
+
+	const s = repo.stats(4);
+	assert.equal(s.weekly.length, 4);
+	assert.equal(s.weekly.at(-1).week, '2026-W44');
+	assert.deepEqual(s.totals, { done: 1, touches: 2, replies: 1 });
+	assert.equal(s.response.rate, 50);
+	assert.equal(s.response.avg_days, 4);
+	assert.equal(s.now.waiting, 1);
+	assert.equal(s.waiting_buckets[1].n, 1, 'IMQ lleva 4 días esperando');
+	assert.deepEqual(s.channels.map((c) => c.channel).sort(), ['email', 'whatsapp']);
+	assert.equal(s.accounts[0].name, 'BCI');
+});

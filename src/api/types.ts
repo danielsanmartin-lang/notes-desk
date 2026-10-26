@@ -58,11 +58,14 @@ export interface Activity {
 	occurred_at: string;
 	item_title?: string | null;
 	item_parent_id?: number | null;
+	poc_name?: string | null;
 }
 
 export interface ItemList {
 	items: Item[];
 	done: Item[];
+	/** Solo en Hoy: lo que no tiene fecha y te toca a ti. */
+	undated?: Item[];
 }
 
 export interface ItemDetail {
@@ -113,6 +116,7 @@ export interface PocAdmin {
 
 export interface Counts {
 	today: number;
+	undated: number;
 	overdue: number;
 	upcoming: number;
 	followups: number;
@@ -163,6 +167,44 @@ export interface Settings {
 	open_at_login: boolean;
 	poc_template: string;
 	hubspot_portal_id: string;
+}
+
+export interface AccountSummary {
+	key: string;
+	name: string;
+	followups: number;
+	waiting: number;
+	tasks: number;
+	poc_items: number;
+	overdue: number;
+	next_due: string | null;
+	pocs: Pick<Poc, 'id' | 'name' | 'color' | 'status'>[];
+	last_activity_at: string | null;
+	touches_30d: number;
+}
+
+export interface AccountDetail extends AccountSummary {
+	open: Item[];
+	done: Item[];
+	pocs: Poc[];
+	contacts: { name: string; email: string | null; role: string | null; poc: string | null; tasks: number }[];
+	activity: Activity[];
+	stats: { touches_30d: number; replies_30d: number; avg_response_days: number | null };
+}
+
+export interface Stats {
+	weeks: number;
+	from: string;
+	to: string;
+	totals: { done: number; touches: number; replies: number };
+	previous: { done: number; touches: number; replies: number };
+	response: { touched: number; answered: number; rate: number | null; avg_days: number | null };
+	now: { mine: number; waiting: number; overdue: number };
+	weekly: { week: string; done: number; touches: number; replies: number }[];
+	waiting_buckets: { label: string; level: 'ok' | 'warn' | 'late' | 'cold'; n: number }[];
+	channels: { channel: Channel | 'none'; n: number }[];
+	accounts: { name: string; touches: number; done: number; replies: number; total: number }[];
+	pocs: { active: number; paused: number; won: number; lost: number; win_rate: number | null; avg_days: number | null };
 }
 
 export interface Suggestions {

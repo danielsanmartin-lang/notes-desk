@@ -81,7 +81,7 @@ export function Timeline({
 				{entries.map((a, i) => {
 					const d = describe(a, today);
 					const sub = parentId != null && a.item_id !== parentId;
-					const context = (showItem || sub) && a.item_title ? a.item_title : null;
+					const context = (showItem || sub) && (a.item_title ?? a.poc_name) ? (a.item_title ?? a.poc_name) : null;
 					return (
 						<motion.li
 							key={a.id}

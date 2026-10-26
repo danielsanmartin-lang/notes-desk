@@ -4,6 +4,8 @@ import { toast } from 'sonner';
 import { toDateStr } from '../../shared/dates.js';
 import { api, qs } from './client';
 import type {
+	AccountDetail,
+	AccountSummary,
 	Activity,
 	Counts,
 	HubspotDeal,
@@ -14,6 +16,7 @@ import type {
 	Poc,
 	PocAdmin,
 	Settings,
+	Stats,
 	Suggestions,
 	WeekDetail,
 	WeekSummary,
@@ -34,13 +37,22 @@ export const useCounts = () => useQuery({ queryKey: ['counts'], queryFn: () => a
 export const usePocs = () => useQuery({ queryKey: ['pocs'], queryFn: () => api<Poc[]>('/pocs') });
 export const usePoc = (id: number) =>
 	useQuery({ queryKey: ['poc', id], queryFn: () => api<{ poc: Poc; admins: PocAdmin[]; activity: Activity[] }>(`/pocs/${id}`), retry: false });
+export const useAccounts = () => useQuery({ queryKey: ['accounts'], queryFn: () => api<AccountSummary[]>('/accounts') });
+export const useAccount = (name: string) =>
+	useQuery({
+		queryKey: ['account', name],
+		queryFn: () => api<AccountDetail>(`/accounts/${encodeURIComponent(name)}`),
+		retry: false,
+	});
+export const useStats = (weeks: number) =>
+	useQuery({ queryKey: ['stats', weeks], queryFn: () => api<Stats>(`/stats?${qs({ weeks })}`), placeholderData: (prev) => prev });
 export const useWeeks = () => useQuery({ queryKey: ['weeks'], queryFn: () => api<WeekSummary[]>('/weeks') });
 export const useWeek = (week: string | undefined) =>
 	useQuery({ queryKey: ['week', week], queryFn: () => api<WeekDetail>(`/weeks/${week}`), enabled: !!week });
 export const useSearch = (q: string) =>
 	useQuery({
 		queryKey: ['search', q],
-		queryFn: () => api<{ items: Item[]; pocs: Poc[] }>(`/search?${qs({ q })}`),
+		queryFn: () => api<{ items: Item[]; pocs: Poc[]; accounts: string[] }>(`/search?${qs({ q })}`),
 		enabled: q.trim().length > 0,
 		placeholderData: (prev) => prev,
 	});

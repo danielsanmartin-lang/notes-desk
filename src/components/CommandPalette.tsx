@@ -1,6 +1,8 @@
 import { Command } from 'cmdk';
 import {
 	Archive,
+	BarChart3,
+	Building2,
 	CalendarDays,
 	CircleCheck,
 	FlaskConical,
@@ -55,14 +57,17 @@ export function CommandPalette() {
 		{ id: 'go-fup', label: 'Ir a Follow-ups', icon: <Send />, hint: '⌘3', run: nav({ kind: 'followups' }) },
 		{ id: 'go-tasks', label: 'Ir a Tareas pendientes', icon: <SquareCheckBig />, hint: '⌘4', run: nav({ kind: 'tasks' }) },
 		{ id: 'go-pocs', label: 'Ir a PoCs en curso', icon: <FlaskConical />, hint: '⌘5', run: nav({ kind: 'pocs' }) },
-		{ id: 'go-weeks', label: 'Ir a Semanas', icon: <Archive />, hint: '⌘6', run: nav({ kind: 'weeks' }) },
-		{ id: 'go-trash', label: 'Ir a la Papelera', icon: <Trash2 />, hint: '⌘7', run: nav({ kind: 'trash' }) },
+		{ id: 'go-accounts', label: 'Ir a Cuentas', icon: <Building2 />, hint: '⌘6', run: nav({ kind: 'accounts' }) },
+		{ id: 'go-stats', label: 'Ir a Estadísticas', icon: <BarChart3 />, hint: '⌘7', run: nav({ kind: 'stats' }) },
+		{ id: 'go-weeks', label: 'Ir a Semanas', icon: <Archive />, hint: '⌘8', run: nav({ kind: 'weeks' }) },
+		{ id: 'go-trash', label: 'Ir a la Papelera', icon: <Trash2 />, hint: '⌘9', run: nav({ kind: 'trash' }) },
 		{ id: 'go-settings', label: 'Ajustes', icon: <Settings />, hint: '⌘,', run: nav({ kind: 'settings' }) },
 	];
 	const fq = fold(q.trim());
 	const shownActions = fq ? actions.filter((a) => fold(a.label).includes(fq)) : actions;
 	const items = q.trim() ? (data?.items ?? []) : [];
 	const pocs = q.trim() ? (data?.pocs ?? []) : [];
+	const accounts = q.trim() ? (data?.accounts ?? []) : [];
 
 	return (
 		<Command.Dialog
@@ -101,6 +106,24 @@ export function CommandPalette() {
 								<PocDot color={p.color} />
 								<span className="flex-1 truncate">{p.name}</span>
 								<span className="text-[11.5px] text-fg-3">{p.company}</span>
+							</Command.Item>
+						))}
+					</Command.Group>
+				)}
+				{accounts.length > 0 && (
+					<Command.Group heading="Cuentas" className="mb-1 [&_[cmdk-group-heading]]:px-2.5 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:text-fg-3">
+						{accounts.map((name) => (
+							<Command.Item
+								key={`account-${name}`}
+								value={`account-${name}`}
+								onSelect={() => {
+									go({ kind: 'account', name });
+									close();
+								}}
+								className={itemClass}
+							>
+								<Building2 />
+								<span className="flex-1 truncate">{name}</span>
 							</Command.Item>
 						))}
 					</Command.Group>

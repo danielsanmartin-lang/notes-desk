@@ -68,6 +68,10 @@ const UPCOMING_COND = `${VISIBLE} AND ${ACTIVE_POC} AND ${OPEN} AND i.due_date >
 const FOLLOWUPS_COND = `${VISIBLE} AND ${OPEN} AND i.parent_id IS NULL
 	AND (i.category = 'followup' OR (@includePoc = 1 AND i.category = 'poc' AND i.state = 'waiting' AND ${ACTIVE_POC}))`;
 const TASKS_COND = `${VISIBLE} AND ${OPEN} AND i.parent_id IS NULL AND i.category = 'task'`;
+// En Hoy también sale lo que no tiene fecha y te toca a ti (lo que espera respuesta sin fecha, no).
+const UNDATED_COND = `${VISIBLE} AND ${ACTIVE_POC} AND i.state = 'todo' AND i.parent_id IS NULL AND i.due_date IS NULL AND i.flagged = 0`;
+// La cuenta de una tarea es su empresa o, si no tiene, la empresa de su PoC.
+const ACCOUNT_EXPR = `coalesce(nullif(i.company, ''), p.company)`;
 
 const emptyToNull = (v) => {
 	if (v == null) return null;
@@ -90,6 +94,8 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 	const ts = () => toDateTimeStr(now());
 	const today = () => toDateStr(now());
 	const weekStart = () => weekRange(isoWeek(today())).start;
+
+	db.function('fold', { deterministic: true }, (v) => (v == null ? null : fold(v)));
 
 	const get = (sql, params = {}) => db.prepare(sql).get(params);
 	const all = (sql, params = {}) => db.prepare(sql).all(params);
@@ -482,6 +488,10 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 			case 'today':
 				return {
 					items: q(TODAY_COND, '(i.due_date IS NULL), i.due_date, i.sort_order, i.id'),
+					undated: q(
+						UNDATED_COND,
+						`CASE i.category WHEN 'followup' THEN 0 WHEN 'poc' THEN 1 ELSE 2 END, p.name, i.sort_order, i.id`,
+					),
 					done: all(
 						`${ITEM_SELECT} WHERE i.deleted_at IS NULL AND i.state = 'done' AND i.completed_at >= @today ORDER BY i.completed_at DESC`,
 						p,
@@ -522,6 +532,7 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 		const n = (where) => get(`SELECT COUNT(*) AS n FROM items i LEFT JOIN pocs p ON p.id = i.poc_id LEFT JOIN items par ON par.id = i.parent_id WHERE ${where}`, p).n;
 		return {
 			today: n(TODAY_COND),
+			undated: n(UNDATED_COND),
 			overdue: n(`${VISIBLE} AND ${ACTIVE_POC} AND ${OPEN} AND i.due_date < @today`),
 			upcoming: n(UPCOMING_COND),
 			followups: n(FOLLOWUPS_COND),
@@ -782,7 +793,7 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 
 	function search(text) {
 		const tokens = fold(text).match(/[\p{L}\p{N}]+/gu) ?? [];
-		if (!tokens.length) return { items: [], pocs: [] };
+		if (!tokens.length) return { items: [], pocs: [], accounts: [] };
 		const match = tokens.map((t) => `"${t}"*`).join(' ');
 		const items = all(
 			`${ITEM_SELECT} JOIN items_fts f ON f.rowid = i.id
@@ -799,7 +810,8 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 			const hay = fold(`${p.name} ${p.company ?? ''} ${p.owner ?? ''} ${admins.get(p.id) ?? ''}`);
 			return tokens.every((t) => hay.includes(t));
 		});
-		return { items, pocs };
+		const accounts = [...accountNames().values()].filter((n) => tokens.every((t) => fold(n).includes(t))).slice(0, 8);
+		return { items, pocs, accounts };
 	}
 
 	function suggestions() {
@@ -818,6 +830,272 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 			`SELECT owner AS value, COUNT(*) AS n FROM pocs WHERE owner IS NOT NULL GROUP BY lower(owner) ORDER BY n DESC, value`,
 		).map((r) => r.value);
 		return { companies, contacts, owners };
+	}
+
+	// ── Cuentas ────────────────────────────────────────────────────────────────
+
+	/** Nombre más usado de cada cuenta (agrupando sin mayúsculas ni acentos). */
+	function accountNames() {
+		// Ojo: el alias no puede llamarse "name", porque pocs tiene esa columna y GROUP BY la cogería.
+		const rows = all(
+			`SELECT trim(${ACCOUNT_EXPR}) AS acc, COUNT(*) AS n FROM items i LEFT JOIN pocs p ON p.id = i.poc_id
+			 WHERE i.deleted_at IS NULL AND ${ACCOUNT_EXPR} IS NOT NULL GROUP BY acc
+			 UNION ALL SELECT trim(company) AS acc, 1 AS n FROM pocs WHERE company IS NOT NULL`,
+		);
+		const spellings = new Map(); // cuenta → (forma de escribirla → veces)
+		for (const r of rows) {
+			const key = fold(r.acc);
+			if (!key) continue;
+			if (!spellings.has(key)) spellings.set(key, new Map());
+			const m = spellings.get(key);
+			m.set(r.acc, (m.get(r.acc) ?? 0) + r.n);
+		}
+		return new Map([...spellings].map(([k, m]) => [k, [...m].sort((a, b) => b[1] - a[1])[0][0]]));
+	}
+
+	function avgResponseDays(replies) {
+		const days = replies
+			.map((r) => {
+				const since = r.meta ? JSON.parse(r.meta).prev?.waiting_since : null;
+				return since ? (new Date(r.occurred_at) - new Date(since)) / 86400000 : null;
+			})
+			.filter((d) => d != null && d >= 0);
+		return days.length ? Math.round((days.reduce((x, y) => x + y, 0) / days.length) * 10) / 10 : null;
+	}
+
+	function listAccounts() {
+		const names = accountNames();
+		const acc = new Map();
+		const entry = (key) => {
+			if (!acc.has(key)) {
+				acc.set(key, {
+					key,
+					name: names.get(key) ?? key,
+					followups: 0,
+					waiting: 0,
+					tasks: 0,
+					poc_items: 0,
+					overdue: 0,
+					next_due: null,
+					pocs: [],
+					last_activity_at: null,
+					touches_30d: 0,
+				});
+			}
+			return acc.get(key);
+		};
+		const items = all(
+			`SELECT fold(${ACCOUNT_EXPR}) AS k, i.category, i.state, i.due_date FROM items i LEFT JOIN pocs p ON p.id = i.poc_id
+			 WHERE i.deleted_at IS NULL AND i.parent_id IS NULL AND i.state <> 'done' AND ${ACCOUNT_EXPR} IS NOT NULL
+			   AND (p.id IS NULL OR p.status IN ('active', 'paused'))`,
+		);
+		for (const r of items) {
+			const e = entry(r.k.trim());
+			if (r.state === 'waiting') e.waiting++;
+			else if (r.category === 'followup') e.followups++;
+			else if (r.category === 'task') e.tasks++;
+			else e.poc_items++;
+			if (r.due_date && r.due_date < today()) e.overdue++;
+			if (r.due_date && (!e.next_due || r.due_date < e.next_due)) e.next_due = r.due_date;
+		}
+		for (const p of listPocs()) {
+			if (p.company) entry(fold(p.company).trim()).pocs.push(pick(p, ['id', 'name', 'color', 'status']));
+		}
+		const acts = all(
+			`SELECT fold(coalesce(nullif(i.company, ''), pi.company, pa.company)) AS k, max(a.occurred_at) AS last,
+			        SUM(a.kind = 'touch' AND a.occurred_at >= @since) AS touches
+			 FROM activity a LEFT JOIN items i ON i.id = a.item_id
+			 LEFT JOIN pocs pi ON pi.id = i.poc_id LEFT JOIN pocs pa ON pa.id = a.poc_id
+			 WHERE a.kind <> 'created' AND (i.id IS NULL OR i.deleted_at IS NULL) GROUP BY k`,
+			{ since: addDays(today(), -30) },
+		);
+		for (const r of acts) {
+			if (!r.k || !acc.has(r.k.trim()) && !names.has(r.k.trim())) continue;
+			const e = entry(r.k.trim());
+			e.last_activity_at = r.last;
+			e.touches_30d = r.touches;
+		}
+		const open = (e) => e.followups + e.waiting + e.tasks + e.poc_items;
+		return [...acc.values()].sort(
+			(a, b) => (open(b) > 0) - (open(a) > 0) || (b.last_activity_at ?? '').localeCompare(a.last_activity_at ?? ''),
+		);
+	}
+
+	function getAccount(name) {
+		const key = fold(name).trim();
+		const summary = listAccounts().find((x) => x.key === key);
+		if (!summary) throw notFound('La cuenta');
+		const p = { key, since: addDays(today(), -30) };
+		const cond = `fold(${ACCOUNT_EXPR}) = @key`;
+		const open = all(
+			`${ITEM_SELECT} WHERE ${VISIBLE} AND i.parent_id IS NULL AND ${OPEN} AND ${cond}
+			 ORDER BY (i.due_date IS NULL), i.due_date, i.sort_order, i.id`,
+			p,
+		).map(itemOut);
+		const done = all(
+			`${ITEM_SELECT} WHERE i.deleted_at IS NULL AND i.parent_id IS NULL AND i.state = 'done' AND i.completed_at >= @since AND ${cond}
+			 ORDER BY i.completed_at DESC`,
+			p,
+		).map(itemOut);
+		const pocs = listPocs().filter((x) => x.company && fold(x.company).trim() === key);
+		const contacts = new Map();
+		for (const r of all(
+			`SELECT i.contact AS name, COUNT(*) AS n FROM items i LEFT JOIN pocs p ON p.id = i.poc_id
+			 WHERE i.deleted_at IS NULL AND i.contact IS NOT NULL AND ${cond} GROUP BY fold(i.contact) ORDER BY n DESC`,
+			p,
+		)) {
+			contacts.set(fold(r.name), { name: r.name, email: null, role: null, poc: null, tasks: r.n });
+		}
+		for (const poc of pocs) {
+			for (const a of pocAdmins(poc.id)) {
+				const k = fold(a.name);
+				const prev = contacts.get(k);
+				contacts.set(k, { name: a.name, email: a.email, role: a.role, poc: poc.name, tasks: prev?.tasks ?? 0 });
+			}
+		}
+		const scope = `(fold(coalesce(nullif(i.company, ''), pi.company)) = @key OR fold(pa.company) = @key)`;
+		const activity = all(
+			`SELECT a.*, i.title AS item_title, coalesce(pa.name, pi.name) AS poc_name
+			 FROM activity a LEFT JOIN items i ON i.id = a.item_id
+			 LEFT JOIN pocs pi ON pi.id = i.poc_id LEFT JOIN pocs pa ON pa.id = a.poc_id
+			 WHERE a.kind <> 'created' AND (i.id IS NULL OR i.deleted_at IS NULL) AND ${scope}
+			 ORDER BY a.occurred_at DESC, a.id DESC LIMIT 150`,
+			p,
+		);
+		const replies = activity.filter((a) => a.kind === 'reply');
+		return {
+			...summary,
+			open,
+			done,
+			pocs,
+			contacts: [...contacts.values()],
+			activity: activity.map(activityOut),
+			stats: {
+				touches_30d: activity.filter((a) => a.kind === 'touch' && a.occurred_at >= p.since).length,
+				replies_30d: replies.filter((a) => a.occurred_at >= p.since).length,
+				avg_response_days: avgResponseDays(replies),
+			},
+		};
+	}
+
+	// ── Estadísticas ───────────────────────────────────────────────────────────
+
+	function stats(weeksParam = 12) {
+		const weeks = Math.min(104, Math.max(4, Number(weeksParam) || 12));
+		const t = today();
+		const monday = weekRange(isoWeek(t)).start;
+		const from = addDays(monday, -(weeks - 1) * 7);
+		const to = addDays(t, 1);
+		const prevFrom = addDays(from, -weeks * 7);
+		const count = (kind, a, b) =>
+			get('SELECT COUNT(*) AS n FROM activity WHERE kind = @kind AND occurred_at >= @a AND occurred_at < @b', { kind, a, b }).n;
+		const totals = (a, b) => ({ done: count('done', a, b), touches: count('touch', a, b), replies: count('reply', a, b) });
+
+		const byWeek = new Map(
+			all(
+				`SELECT week, SUM(kind = 'done') AS done, SUM(kind = 'touch') AS touches, SUM(kind = 'reply') AS replies
+				 FROM v_week_log WHERE occurred_at >= @from GROUP BY week`,
+				{ from },
+			).map((r) => [r.week, r]),
+		);
+		const weekly = Array.from({ length: weeks }, (_, i) => {
+			const w = isoWeek(addDays(from, i * 7));
+			const r = byWeek.get(w);
+			return { week: w, done: r?.done ?? 0, touches: r?.touches ?? 0, replies: r?.replies ?? 0 };
+		});
+
+		// De los follow-ups que tocaste en el periodo, cuántos han respondido después.
+		const touched = all(
+			`SELECT item_id, min(occurred_at) AS first FROM activity
+			 WHERE kind = 'touch' AND item_id IS NOT NULL AND occurred_at >= @from AND occurred_at < @to GROUP BY item_id`,
+			{ from, to },
+		);
+		const repliesSince = all(`SELECT item_id, occurred_at FROM activity WHERE kind = 'reply' AND occurred_at >= @from`, { from });
+		const answered = touched.filter((x) => repliesSince.some((r) => r.item_id === x.item_id && r.occurred_at > x.first)).length;
+		const periodReplies = all(`SELECT occurred_at, meta FROM activity WHERE kind = 'reply' AND occurred_at >= @from AND occurred_at < @to`, {
+			from,
+			to,
+		});
+
+		const waitingNow = all(
+			`SELECT i.waiting_since FROM items i LEFT JOIN pocs p ON p.id = i.poc_id LEFT JOIN items par ON par.id = i.parent_id
+			 WHERE ${VISIBLE} AND i.state = 'waiting' AND i.parent_id IS NULL AND ${ACTIVE_POC}`,
+		);
+		const buckets = [
+			{ label: '0–3 días', level: 'ok', max: 3, n: 0 },
+			{ label: '4–7 días', level: 'warn', max: 7, n: 0 },
+			{ label: '8–14 días', level: 'late', max: 14, n: 0 },
+			{ label: 'Más de 14', level: 'cold', max: Infinity, n: 0 },
+		];
+		for (const w of waitingNow) {
+			const d = w.waiting_since ? Math.round((new Date(`${t}T00:00:00`) - new Date(`${w.waiting_since.slice(0, 10)}T00:00:00`)) / 86400000) : 0;
+			buckets.find((b) => d <= b.max).n++;
+		}
+
+		const channels = all(
+			`SELECT coalesce(channel, 'none') AS channel, COUNT(*) AS n FROM activity
+			 WHERE kind = 'touch' AND occurred_at >= @from AND occurred_at < @to GROUP BY channel ORDER BY n DESC`,
+			{ from, to },
+		);
+
+		const names = accountNames();
+		const accounts = all(
+			`SELECT fold(coalesce(nullif(i.company, ''), pi.company, pa.company)) AS k,
+			        SUM(a.kind = 'touch') AS touches, SUM(a.kind = 'done') AS done, SUM(a.kind = 'reply') AS replies
+			 FROM activity a LEFT JOIN items i ON i.id = a.item_id
+			 LEFT JOIN pocs pi ON pi.id = i.poc_id LEFT JOIN pocs pa ON pa.id = a.poc_id
+			 WHERE a.kind IN ('touch', 'done', 'reply') AND a.occurred_at >= @from AND a.occurred_at < @to AND k IS NOT NULL
+			 GROUP BY k`,
+			{ from, to },
+		)
+			.map((r) => ({ name: names.get(r.k.trim()) ?? r.k, touches: r.touches, done: r.done, replies: r.replies, total: r.touches + r.done + r.replies }))
+			.sort((a, b) => b.total - a.total)
+			.slice(0, 8);
+
+		const pocRows = all(`SELECT status, start_date, created_at, closed_at FROM pocs`);
+		const byStatus = (s) => pocRows.filter((r) => r.status === s).length;
+		const closed = pocRows.filter((r) => r.closed_at && (r.status === 'won' || r.status === 'lost'));
+		const durations = closed.map((r) => (new Date(r.closed_at) - new Date(r.start_date ?? r.created_at)) / 86400000).filter((d) => d >= 0);
+		const won = byStatus('won');
+		const lost = byStatus('lost');
+
+		return {
+			weeks,
+			from,
+			to: t,
+			totals: totals(from, to),
+			previous: totals(prevFrom, from),
+			response: {
+				touched: touched.length,
+				answered,
+				rate: touched.length ? Math.round((answered / touched.length) * 100) : null,
+				avg_days: avgResponseDays(periodReplies),
+			},
+			now: {
+				mine: get(
+					`SELECT COUNT(*) AS n FROM items i LEFT JOIN pocs p ON p.id = i.poc_id LEFT JOIN items par ON par.id = i.parent_id
+					 WHERE ${VISIBLE} AND ${ACTIVE_POC} AND i.state = 'todo' AND i.parent_id IS NULL`,
+				).n,
+				waiting: waitingNow.length,
+				overdue: get(
+					`SELECT COUNT(*) AS n FROM items i LEFT JOIN pocs p ON p.id = i.poc_id LEFT JOIN items par ON par.id = i.parent_id
+					 WHERE ${VISIBLE} AND ${ACTIVE_POC} AND ${OPEN} AND i.due_date < @today`,
+					{ today: t },
+				).n,
+			},
+			weekly,
+			waiting_buckets: buckets.map(({ label, level, n }) => ({ label, level, n })),
+			channels,
+			accounts,
+			pocs: {
+				active: byStatus('active'),
+				paused: byStatus('paused'),
+				won,
+				lost,
+				win_rate: won + lost ? Math.round((won / (won + lost)) * 100) : null,
+				avg_days: durations.length ? Math.round(durations.reduce((x, y) => x + y, 0) / durations.length) : null,
+			},
+		};
 	}
 
 	// ── Mantenimiento y avisos ─────────────────────────────────────────────────
@@ -872,6 +1150,9 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 		addPocAdmin,
 		updatePocAdmin,
 		deletePocAdmin,
+		listAccounts,
+		getAccount,
+		stats,
 		applyHubspotDeal,
 		listWeeks,
 		getWeek,

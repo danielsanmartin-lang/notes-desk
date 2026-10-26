@@ -1,6 +1,8 @@
 import { useDroppable } from '@dnd-kit/core';
 import {
 	Archive,
+	BarChart3,
+	Building2,
 	CalendarDays,
 	ChevronRight,
 	FlaskConical,
@@ -194,12 +196,14 @@ export function Sidebar() {
 					)}
 				</AnimatePresence>
 
-				<div className="px-2 pt-4 pb-1 text-[11px] font-semibold tracking-wide text-fg-3 uppercase">Archivo</div>
+				<div className="px-2 pt-4 pb-1 text-[11px] font-semibold tracking-wide text-fg-3 uppercase">Visión general</div>
+				<NavItem view={{ kind: 'accounts' }} icon={<Building2 />} iconClass="text-accent" label="Cuentas" />
+				<NavItem view={{ kind: 'stats' }} icon={<BarChart3 />} iconClass="text-teal" label="Estadísticas" />
 				<NavItem view={{ kind: 'weeks' }} icon={<Archive />} label="Semanas" />
-				<NavItem view={{ kind: 'trash' }} icon={<Trash2 />} label="Papelera" count={c?.trash} />
 			</div>
 
-			<div className="border-t border-line px-3 py-2">
+			<div className="space-y-0.5 border-t border-line px-3 py-2">
+				<NavItem view={{ kind: 'trash' }} icon={<Trash2 />} label="Papelera" count={c?.trash} />
 				<NavItem view={{ kind: 'settings' }} icon={<Settings />} label="Ajustes" />
 				{isElectron && (
 					<div className="mt-1 px-2 text-[11px] text-fg-3">

@@ -16,6 +16,7 @@ export interface ComposerDefaults {
 	category: Category;
 	poc_id?: number;
 	due_date?: string;
+	company?: string;
 }
 
 export interface Parsed {
@@ -61,7 +62,7 @@ export function useCreateFromParsed() {
 			due_date: parsed.dueDate ?? defaults.due_date ?? null,
 			remind_at: parsed.remindAt,
 			flagged: parsed.flagged,
-			company: parsed.company,
+			company: parsed.company ?? defaults.company ?? null,
 		});
 	};
 }

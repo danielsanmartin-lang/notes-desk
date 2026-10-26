@@ -9,7 +9,10 @@ SQLite local.
 
 ## Cómo se usa
 
-- **Hoy**: lo que vence hoy o antes, los follow-ups que toca volver a perseguir y lo destacado (★).
+- **Hoy**: lo que vence hoy o antes, los follow-ups que toca volver a perseguir, lo destacado (★) y,
+  en un grupo aparte, todo lo que no tiene fecha y te toca a ti (también las tareas de las PoCs
+  activas, con el nombre de su PoC). El número de la barra lateral, del Dock y de la barra de menús
+  cuenta solo lo que vence, no lo que no tiene fecha.
 - **Próximos 7 días**: lo programado, agrupado por día.
 - **Follow-ups**: dos grupos, *Me toca* y *Esperando respuesta*, con los días que llevas esperando
   (verde, ámbar, rojo).
@@ -21,6 +24,12 @@ SQLite local.
 - **PoCs en curso**: una tarjeta por PoC (progreso, siguiente tarea, etapa de HubSpot). Dentro, su
   checklist, notas, historial, el enlace al deal y **Pausar hasta…** (sus tareas desaparecen de Hoy y
   vuelven solas cuando termina la pausa). Al crearla se puede partir de una plantilla de checklist.
+- **Cuentas**: salen solas de la empresa de cada tarea y de cada PoC (sin distinguir mayúsculas ni
+  acentos). Cada cuenta reúne lo que te toca, lo que espera respuesta, sus PoCs, los contactos
+  (incluidos los admins de sus PoCs), lo completado en 30 días y su historial.
+- **Estadísticas**: completadas, toques y respuestas por semana (con el periodo anterior), tasa y
+  tiempo medio de respuesta, follow-ups esperando según antigüedad, toques por canal, cuentas con
+  más actividad y resumen de PoCs. Periodo de 4 semanas a 1 año.
 - **Semanas**: por cada semana ISO (W44 · 26 oct – 1 nov), lo completado, los toques y las respuestas.
   **Copiar resumen** lo deja en markdown en el portapapeles.
 - **Papelera**: lo borrado se recupera hasta que la vacías.
@@ -44,7 +53,7 @@ espacios). En la captura rápida, Tab cambia el tipo, ↩ guarda y ⌘↩ guarda
 
 ### Atajos
 
-⌘K buscar y acciones · ⌘N nueva tarea · ⌘1–7 secciones · ⌘, ajustes · ↑ ↓ moverse por la lista ·
+⌘K buscar y acciones · ⌘N nueva tarea · ⌘1–9 secciones · ⌘, ajustes · ↑ ↓ moverse por la lista ·
 Espacio completar · ⌘T registrar toque · ⌘⌫ a la papelera · Esc cerrar el panel. Arrastrar una tarea a
 una PoC o categoría de la barra lateral la mueve allí.
 
