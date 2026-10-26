@@ -1,0 +1,121 @@
+# Zepo Desk
+
+Seguimiento de lo que tengo que hacer en Zepo: **follow-ups**, **tareas pendientes** y las tareas de cada
+**PoC en curso**. Sustituye al Google Doc de "Tareas W42, W43, W44…": lo pendiente está siempre a la
+vista y lo hecho se archiva solo por semanas.
+
+Se usa como app de escritorio (`/Applications/Zepo Desk.app`). Todo se guarda en una base de datos
+SQLite local.
+
+## Cómo se usa
+
+- **Hoy**: lo que vence hoy o antes, los follow-ups que toca volver a perseguir y lo destacado (★).
+- **Próximos 7 días**: lo programado, agrupado por día.
+- **Follow-ups**: dos grupos, *Me toca* y *Esperando respuesta*, con los días que llevas esperando
+  (verde, ámbar, rojo).
+  - **Registrar toque** (⌘T o el botón «Toque» de la fila): canal, nota y cuándo volver a perseguir
+    (por defecto en 3 días, nunca en fin de semana). Queda en la bitácora y pasa a *Esperando*.
+  - **Han respondido**: vuelve a *Me toca*, o se cierra.
+  - Cuando llega la fecha y sigue sin respuesta, salta a *Hoy* como «Toca volver a perseguir».
+- **Tareas pendientes**: lista libre, se reordena arrastrando.
+- **PoCs en curso**: una tarjeta por PoC (progreso, siguiente tarea, etapa de HubSpot). Dentro, su
+  checklist, notas, historial, el enlace al deal y **Pausar hasta…** (sus tareas desaparecen de Hoy y
+  vuelven solas cuando termina la pausa). Al crearla se puede partir de una plantilla de checklist.
+- **Semanas**: por cada semana ISO (W44 · 26 oct – 1 nov), lo completado, los toques y las respuestas.
+  **Copiar resumen** lo deja en markdown en el portapapeles.
+- **Papelera**: lo borrado se recupera hasta que la vacías.
+
+Cada tarea tiene un panel de detalle con fecha, recordatorio con hora, empresa, contacto, canal,
+notas, subtareas, una **plantilla de mensaje** (Copiar / abrir en WhatsApp / email) y su **bitácora**.
+
+### Escribir rápido
+
+En el campo «Añadir…» de cada lista, y en la **captura rápida** (⌥Espacio desde cualquier app):
+
+| Escribes | Entiende |
+| --- | --- |
+| `FUP Catalina BCI el viernes` | follow-up, fecha viernes, empresa BCI |
+| `Kickoff @cafam jueves 10:00` | tarea de la PoC Cafam, jueves, aviso a las 10:00 |
+| `Preparar precio #tarea !` | tarea, destacada |
+| `pasado mañana`, `en 3 días`, `30 oct`, `la semana que viene`, `el lunes que viene` | fechas |
+
+`#fup` / `#tarea` / `#poc` fijan la categoría y `@nombre` la PoC (`@"Corporación América"` si lleva
+espacios). En la captura rápida, Tab cambia el tipo, ↩ guarda y ⌘↩ guarda y abre la tarea.
+
+### Atajos
+
+⌘K buscar y acciones · ⌘N nueva tarea · ⌘1–7 secciones · ⌘, ajustes · ↑ ↓ moverse por la lista ·
+Espacio completar · ⌘T registrar toque · ⌘⌫ a la papelera · Esc cerrar el panel. Arrastrar una tarea a
+una PoC o categoría de la barra lateral la mueve allí.
+
+### Barra de menús y avisos
+
+El icono de la barra de menús muestra cuántas cosas tienes hoy y las lista para abrir cualquiera. El
+mismo número sale en el Dock. Cerrar la ventana no cierra la app (⌘Q sí).
+
+- **Resumen diario** a la hora de los ajustes (9:00 por defecto): «Hoy: 4 pendientes · Volver a
+  perseguir: BCI · Follow-ups: IMQ, Eurecat».
+- **Recordatorio** en cada tarea con hora (`… jueves 10:00` o desde el panel).
+
+## Integraciones
+
+- **HubSpot (solo lectura).** Cada PoC acepta el enlace o el ID de su deal y lo abre en el
+  navegador. Si hay token, además sincroniza nombre, etapa, importe y fecha de cierre, y permite
+  buscar entre tus deals del pipeline Sales. El token se lee igual que en
+  `~/.hermes/scripts/hubspot_fechas.py`: variable `HUBSPOT_TOKEN` o la línea `HUBSPOT_TOKEN=…` de
+  `~/.hermes/.env`. Nunca se escribe en HubSpot.
+- **Informe semanal.** `~/.claude/skills/informe-semanal/scripts/hechos_semana.py` lee esta base
+  (solo lectura) y añade a los hechos de la semana los toques, respuestas, tareas completadas y
+  cambios de estado de PoCs.
+- **Copia de seguridad.** La skill `backup-sistema` incluye la base de datos.
+
+## Datos
+
+- Base de datos: `~/Library/Application Support/Zepo Desk/zepo-desk.db` (SQLite, modo WAL).
+- Copias automáticas: una al día en `…/Zepo Desk/backups/`, se guardan las 14 últimas.
+- Tablas: `items` (follow-ups, tareas y tareas de PoC; `state` = `todo` me toca, `waiting` esperando,
+  `done`), `pocs`, `activity` (la bitácora: toques, respuestas, notas, completadas, pausas…),
+  `settings`. La vista `v_week_log` da cada hecho con su semana ISO (`2026-W44`).
+- Para leerla desde fuera sin riesgo: `sqlite3 "file:…/zepo-desk.db?mode=ro"`.
+
+## Arquitectura
+
+```
+Electron (proceso principal)          electron/
+ ├─ Ventana principal ──┐
+ ├─ Captura rápida ─────┤  HTTP en 127.0.0.1 (puerto libre) + token por sesión
+ ├─ Barra de menús      │
+ ├─ Avisos              │
+ └─ Servidor Express ◄──┘             server/   (index.js rutas, repo.js lógica, db.js SQLite)
+        └─ better-sqlite3 → zepo-desk.db
+UI: React 19 + TypeScript + Vite + Tailwind v4   src/
+Lógica compartida (fechas, parser de captura)    shared/
+```
+
+Como en S1, el servidor va dentro de Electron y solo escucha en 127.0.0.1; la API exige un token que
+cambia en cada arranque. La UI se habla con él por HTTP, así que en desarrollo se puede abrir en el
+navegador con datos reales.
+
+## Recompilar e instalar
+
+```bash
+npm run app:install
+```
+
+Compila la UI, empaqueta el `.app` con electron-builder, lo firma ad-hoc y lo copia a
+`/Applications` (cierra antes la app si está abierta).
+
+## Desarrollo
+
+```bash
+npm run seed       # crea data/dev.db con datos de ejemplo (las tareas del Google Doc de W44)
+npm run dev        # Vite en :5173 + Electron con el servidor en :4100, usando data/dev.db
+npm run dev:web    # lo mismo sin Electron: la UI en el navegador (http://localhost:5173)
+npm test           # node:test bajo el Node de Electron: fechas, parser, flujo de follow-ups, PoCs, semanas
+npm run icons      # regenera build/icon.icns y los iconos de la barra de menús
+```
+
+`better-sqlite3` está compilado para el Node de Electron (lo hace `postinstall`), por eso el servidor
+de desarrollo y los tests corren con `ELECTRON_RUN_AS_NODE=1 electron …` y no con `node`.
+
+El proyecto está en git; cada cambio, en su commit.

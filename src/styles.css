@@ -1,0 +1,194 @@
+@import 'tailwindcss';
+
+/* Paleta Zepo: azul eléctrico #142CD1, navy #070E34, turquesa #7BE9E4, coral #FF3B5C. */
+:root {
+	--bg: #ffffff;
+	--panel: #fbfbfd;
+	--sidebar: #f3f4f9;
+	--raised: #ffffff;
+	--fg: #0b1030;
+	--fg-2: #565c7a;
+	--fg-3: #9399b2;
+	--line: rgb(11 16 48 / 0.08);
+	--line-strong: rgb(11 16 48 / 0.14);
+	--hover: rgb(11 16 48 / 0.04);
+	--active: rgb(20 44 209 / 0.09);
+	--accent: #142cd1;
+	--accent-fg: #ffffff;
+	--accent-soft: rgb(20 44 209 / 0.09);
+	--accent-text: #1428b8;
+	--ok: #13865f;
+	--ok-soft: rgb(29 158 117 / 0.12);
+	--warn: #b8650e;
+	--warn-soft: rgb(239 159 39 / 0.16);
+	--danger: #d62e4b;
+	--danger-soft: rgb(255 59 92 / 0.12);
+	--teal: #0b8f99;
+	--teal-soft: rgb(123 233 228 / 0.28);
+	--shadow: 0 1px 2px rgb(7 14 52 / 0.06), 0 8px 24px rgb(7 14 52 / 0.08);
+	--shadow-lg: 0 2px 6px rgb(7 14 52 / 0.08), 0 24px 60px rgb(7 14 52 / 0.18);
+	color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--bg: #12152b;
+		--panel: #161a33;
+		--sidebar: #0d1024;
+		--raised: #1c2040;
+		--fg: #e8eafa;
+		--fg-2: #a3a8c6;
+		--fg-3: #6b7090;
+		--line: rgb(232 234 250 / 0.08);
+		--line-strong: rgb(232 234 250 / 0.15);
+		--hover: rgb(232 234 250 / 0.05);
+		--active: rgb(110 128 255 / 0.16);
+		--accent: #5b6dff;
+		--accent-fg: #ffffff;
+		--accent-soft: rgb(91 109 255 / 0.18);
+		--accent-text: #a6b1ff;
+		--ok: #4fd1a1;
+		--ok-soft: rgb(79 209 161 / 0.14);
+		--warn: #f2b45a;
+		--warn-soft: rgb(242 180 90 / 0.15);
+		--danger: #ff6b85;
+		--danger-soft: rgb(255 107 133 / 0.15);
+		--teal: #7be9e4;
+		--teal-soft: rgb(123 233 228 / 0.14);
+		--shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px rgb(0 0 0 / 0.3);
+		--shadow-lg: 0 2px 6px rgb(0 0 0 / 0.4), 0 24px 60px rgb(0 0 0 / 0.5);
+		color-scheme: dark;
+	}
+}
+
+@theme inline {
+	--color-bg: var(--bg);
+	--color-panel: var(--panel);
+	--color-sidebar: var(--sidebar);
+	--color-raised: var(--raised);
+	--color-fg: var(--fg);
+	--color-fg-2: var(--fg-2);
+	--color-fg-3: var(--fg-3);
+	--color-line: var(--line);
+	--color-line-strong: var(--line-strong);
+	--color-hover: var(--hover);
+	--color-active: var(--active);
+	--color-accent: var(--accent);
+	--color-accent-fg: var(--accent-fg);
+	--color-accent-soft: var(--accent-soft);
+	--color-accent-text: var(--accent-text);
+	--color-ok: var(--ok);
+	--color-ok-soft: var(--ok-soft);
+	--color-warn: var(--warn);
+	--color-warn-soft: var(--warn-soft);
+	--color-danger: var(--danger);
+	--color-danger-soft: var(--danger-soft);
+	--color-teal: var(--teal);
+	--color-teal-soft: var(--teal-soft);
+	--shadow-card: var(--shadow);
+	--shadow-float: var(--shadow-lg);
+	--font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Helvetica Neue', sans-serif;
+	--font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', 'Helvetica Neue', sans-serif;
+}
+
+html,
+body,
+#root {
+	height: 100%;
+}
+
+body {
+	margin: 0;
+	background: var(--bg);
+	color: var(--fg);
+	font-family: var(--font-sans);
+	font-size: 13.5px;
+	-webkit-font-smoothing: antialiased;
+	user-select: none;
+	overflow: hidden;
+}
+
+/* En Electron la barra lateral deja ver el material translúcido de macOS (vibrancy). */
+html.electron body {
+	background: transparent;
+}
+html.electron .sidebar-surface {
+	background: transparent;
+}
+html.quick body {
+	background: transparent;
+}
+
+input,
+textarea,
+[contenteditable='true'],
+.selectable {
+	user-select: text;
+}
+
+::selection {
+	background: var(--accent-soft);
+}
+
+.drag {
+	-webkit-app-region: drag;
+}
+.no-drag,
+.drag button,
+.drag input,
+.drag a {
+	-webkit-app-region: no-drag;
+}
+
+/* Barras de scroll discretas, al estilo macOS. */
+.scroll {
+	overflow-y: auto;
+	scrollbar-width: thin;
+	scrollbar-color: var(--line-strong) transparent;
+}
+
+button {
+	cursor: default;
+}
+
+button:focus-visible,
+a:focus-visible,
+[role='button']:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
+	border-radius: 6px;
+}
+
+input[type='date']::-webkit-calendar-picker-indicator,
+input[type='datetime-local']::-webkit-calendar-picker-indicator {
+	opacity: 0.55;
+}
+
+@keyframes pulse-ring {
+	0% {
+		box-shadow: 0 0 0 0 var(--accent-soft);
+	}
+	100% {
+		box-shadow: 0 0 0 10px transparent;
+	}
+}
+
+@keyframes pop {
+	from {
+		opacity: 0;
+		transform: translateY(-4px) scale(0.98);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+@keyframes fade {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}

@@ -1,0 +1,111 @@
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMemo } from 'react';
+import { toast } from 'sonner';
+import { toDateStr } from '../../shared/dates.js';
+import { api, qs } from './client';
+import type {
+	Activity,
+	Counts,
+	HubspotDeal,
+	Item,
+	ItemDetail,
+	ItemList,
+	Meta,
+	Poc,
+	Settings,
+	Suggestions,
+	WeekDetail,
+	WeekSummary,
+} from './types';
+
+export type ListView = 'today' | 'upcoming' | 'followups' | 'tasks' | 'poc' | 'trash';
+
+export const useItems = (view: ListView, params: { poc?: number; includePoc?: boolean } = {}) =>
+	useQuery({
+		queryKey: ['items', view, params],
+		queryFn: () => api<ItemList>(`/items?${qs({ view, poc: params.poc, includePoc: params.includePoc })}`),
+	});
+
+export const useItem = (id: number | null) =>
+	useQuery({ queryKey: ['item', id], queryFn: () => api<ItemDetail>(`/items/${id}`), enabled: id != null, retry: false });
+
+export const useCounts = () => useQuery({ queryKey: ['counts'], queryFn: () => api<Counts>('/counts') });
+export const usePocs = () => useQuery({ queryKey: ['pocs'], queryFn: () => api<Poc[]>('/pocs') });
+export const usePoc = (id: number) =>
+	useQuery({ queryKey: ['poc', id], queryFn: () => api<{ poc: Poc; activity: Activity[] }>(`/pocs/${id}`), retry: false });
+export const useWeeks = () => useQuery({ queryKey: ['weeks'], queryFn: () => api<WeekSummary[]>('/weeks') });
+export const useWeek = (week: string | undefined) =>
+	useQuery({ queryKey: ['week', week], queryFn: () => api<WeekDetail>(`/weeks/${week}`), enabled: !!week });
+export const useSearch = (q: string) =>
+	useQuery({
+		queryKey: ['search', q],
+		queryFn: () => api<{ items: Item[]; pocs: Poc[] }>(`/search?${qs({ q })}`),
+		enabled: q.trim().length > 0,
+		placeholderData: (prev) => prev,
+	});
+export const useSuggestions = () =>
+	useQuery({ queryKey: ['suggestions'], queryFn: () => api<Suggestions>('/suggestions'), staleTime: 30_000 });
+export const useSettings = () => useQuery({ queryKey: ['settings'], queryFn: () => api<Settings>('/settings') });
+export const useMeta = () => useQuery({ queryKey: ['meta'], queryFn: () => api<Meta>('/meta'), refetchInterval: 60_000 });
+export const useHubspotStatus = () =>
+	useQuery({ queryKey: ['hubspot-status'], queryFn: () => api<{ connected: boolean }>('/hubspot/status'), staleTime: 60_000 });
+export const useHubspotSearch = (q: string, enabled: boolean) =>
+	useQuery({
+		queryKey: ['hubspot-search', q],
+		queryFn: () => api<HubspotDeal[]>(`/hubspot/search?${qs({ q })}`),
+		enabled,
+		retry: false,
+		placeholderData: (prev) => prev,
+	});
+
+/** Hoy según el servidor (cambia a medianoche aunque la app siga abierta). */
+export function useToday() {
+	const { data } = useMeta();
+	return data?.today ?? toDateStr(new Date());
+}
+
+type ItemInput = Partial<Omit<Item, 'flagged'>> & { flagged?: boolean };
+
+/** Todas las escrituras. Tras cada una se refresca todo (la app es pequeña) y los errores salen en un toast. */
+export function useActions() {
+	const qc = useQueryClient();
+	return useMemo(() => {
+		const run = async <T>(p: Promise<T>): Promise<T> => {
+			try {
+				return await p;
+			} catch (e) {
+				toast.error((e as Error).message);
+				throw e;
+			} finally {
+				qc.invalidateQueries();
+			}
+		};
+		const post = <T>(path: string, body?: unknown) => run(api<T>(path, { method: 'POST', body: body ?? {} }));
+		return {
+			create: (data: ItemInput) => post<Item>('/items', data),
+			update: (id: number, data: ItemInput) => run(api<Item>(`/items/${id}`, { method: 'PATCH', body: data })),
+			complete: (id: number) => post<Item>(`/items/${id}/complete`),
+			reopen: (id: number) => post<Item>(`/items/${id}/reopen`),
+			touch: (id: number, body: { channel?: string | null; body?: string; next_date?: string | null }) =>
+				post<{ item: Item; activity_id: number }>(`/items/${id}/touch`, body),
+			reply: (id: number, body: { body?: string; complete?: boolean }) =>
+				post<{ item: Item; activity_id: number }>(`/items/${id}/reply`, body),
+			note: (id: number, body: string) => post<Activity>(`/items/${id}/note`, { body }),
+			remove: (id: number) => post<Item>(`/items/${id}/delete`),
+			restore: (id: number) => post<Item>(`/items/${id}/restore`),
+			purge: (id: number) => run(api(`/items/${id}`, { method: 'DELETE' })),
+			emptyTrash: () => post<{ deleted: number }>('/trash/empty'),
+			reorder: (ids: number[]) => post('/items/reorder', { ids }),
+			deleteActivity: (id: number) => run(api(`/activity/${id}`, { method: 'DELETE' })),
+			createPoc: (data: Partial<Poc> & { hubspot?: string; use_template?: boolean }) => post<Poc>('/pocs', data),
+			updatePoc: (id: number, data: Partial<Poc> & { hubspot?: string | null }) =>
+				run(api<Poc>(`/pocs/${id}`, { method: 'PATCH', body: data })),
+			setPocStatus: (id: number, body: { status: string; paused_until?: string | null; body?: string }) =>
+				post<Poc>(`/pocs/${id}/status`, body),
+			deletePoc: (id: number) => run(api(`/pocs/${id}`, { method: 'DELETE' })),
+			pocNote: (id: number, body: string) => post<Activity>(`/pocs/${id}/note`, { body }),
+			syncHubspot: (id: number) => post<Poc>(`/pocs/${id}/hubspot/sync`),
+			saveSettings: (patch: Partial<Settings>) => run(api<Settings>('/settings', { method: 'PATCH', body: patch })),
+		};
+	}, [qc]);
+}
