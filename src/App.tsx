@@ -221,6 +221,11 @@ export function App() {
 					<option key={c} value={c} />
 				))}
 			</datalist>
+			<datalist id="zd-owners">
+				{sugg?.owners.map((o) => (
+					<option key={o} value={o} />
+				))}
+			</datalist>
 			<datalist id="zd-contacts">
 				{sugg?.contacts.map((c) => (
 					<option key={c.value} value={c.value}>

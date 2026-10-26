@@ -31,6 +31,7 @@ import {
 import type { Poc } from '../api/types';
 import { Chip, DueChip, EmptyState, PocDot, ProgressBar } from '../components/bits';
 import { Composer } from '../components/Composer';
+import { Avatar, PocAdmins, pocDayLabel, PocFacts } from '../components/PocDetails';
 import { DoneSection, TaskList } from '../components/TaskList';
 import { Timeline } from '../components/Timeline';
 import {
@@ -94,12 +95,28 @@ function PocCard({ poc, today }: { poc: Poc; today: string }) {
 					</div>
 					<div className="truncate text-[12px] text-fg-3">{poc.company ?? 'Sin empresa'}</div>
 				</div>
+				{poc.owner && (
+					<span title={`Owner: ${poc.owner}`}>
+						<Avatar name={poc.owner} color={poc.color} size={24} />
+					</span>
+				)}
 			</div>
 			<div className="mt-2.5 flex flex-wrap gap-1.5">
 				<StatusChip poc={poc} today={today} />
 				{poc.hubspot_stage && <Chip tone="teal">HubSpot · {poc.hubspot_stage}</Chip>}
 				{poc.waiting > 0 && <Chip tone="warn">{poc.waiting} esperando</Chip>}
 			</div>
+			{(poc.start_date || poc.admin_count > 0) && (
+				<div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-fg-2">
+					{poc.start_date && (
+						<span>
+							Inicio {formatDay(poc.start_date, today)}
+							{poc.status === 'active' && <span className="text-fg-3"> · {pocDayLabel(poc.start_date, today)}</span>}
+						</span>
+					)}
+					{poc.admin_count > 0 && <span>{plural(poc.admin_count, 'admin', 'admins')} del cliente</span>}
+				</div>
+			)}
 			<div className="mt-3.5 flex items-center justify-between text-[11.5px] text-fg-3">
 				<span>{poc.total ? `${poc.done} de ${poc.total} tareas` : 'Sin tareas'}</span>
 				{poc.total > 0 && <span>{Math.round((poc.done / poc.total) * 100)}%</span>}
@@ -189,7 +206,8 @@ export function NewPocDialog() {
 	const { newPocOpen, setNewPocOpen, go } = useUI();
 	const a = useActions();
 	const { data: settings } = useSettings();
-	const [form, setForm] = useState({ name: '', company: '', country: '', hubspot: '', use_template: true });
+	const empty = { name: '', company: '', country: '', owner: '', start_date: '', hubspot: '', use_template: true };
+	const [form, setForm] = useState(empty);
 	const templateCount = (settings?.poc_template ?? '').split('\n').filter((l) => l.trim()).length;
 	const set = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm({ ...form, [k]: e.target.value });
 
@@ -197,7 +215,7 @@ export function NewPocDialog() {
 		if (!form.name.trim()) return;
 		const poc = await a.createPoc({ ...form, use_template: form.use_template && templateCount > 0 });
 		setNewPocOpen(false);
-		setForm({ name: '', company: '', country: '', hubspot: '', use_template: true });
+		setForm(empty);
 		go({ kind: 'poc', id: poc.id });
 	};
 
@@ -222,6 +240,16 @@ export function NewPocDialog() {
 					<label className="block">
 						<span className="mb-1 block text-[12px] font-medium text-fg-2">País</span>
 						<input value={form.country} onChange={set('country')} placeholder="CO" maxLength={2} className={cx(inputClass, 'uppercase')} />
+					</label>
+				</div>
+				<div className="grid grid-cols-[1fr_150px] gap-2">
+					<label className="block">
+						<span className="mb-1 block text-[12px] font-medium text-fg-2">Owner</span>
+						<input value={form.owner} onChange={set('owner')} list="zd-owners" placeholder="¿Quién la lleva?" className={inputClass} />
+					</label>
+					<label className="block">
+						<span className="mb-1 block text-[12px] font-medium text-fg-2">Fecha de inicio</span>
+						<input type="date" value={form.start_date} onChange={set('start_date')} className={inputClass} />
 					</label>
 				</div>
 				<label className="block">
@@ -574,6 +602,7 @@ export function PocView({ id }: { id: number }) {
 					</div>
 				)}
 
+				<PocFacts poc={poc} adminCount={data.admins.length} today={today} />
 				<HubspotCard poc={poc} today={today} />
 
 				<div className="mt-5 mb-2 flex items-center gap-3">
@@ -586,6 +615,8 @@ export function PocView({ id }: { id: number }) {
 				<Composer defaults={{ category: 'poc', poc_id: poc.id }} placeholder="Añadir tarea a la PoC… (prueba «Kickoff con Brigitte el jueves»)" />
 				<TaskList items={items} today={today} options={{ sortable: true, listKey: `poc-${poc.id}`, queryKey: ['items', 'poc', { poc: poc.id }] }} />
 				<DoneSection items={list?.done ?? []} today={today} title="Hechas" defaultOpen />
+
+				<PocAdmins poc={poc} admins={data.admins} />
 
 				<div className="mt-8">
 					<SectionTitle>Notas de la PoC</SectionTitle>

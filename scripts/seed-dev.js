@@ -85,7 +85,9 @@ repo.completeItem(diego.id);
 
 // ── PoCs ──
 at(-9);
-const cafam = repo.createPoc({ name: 'Cafam', company: 'Cafam', country: 'CO' });
+const cafam = repo.createPoc({ name: 'Cafam', company: 'Cafam', country: 'CO', owner: 'Daniel San Martín', start_date: day(7) });
+repo.addPocAdmin(cafam.id, { name: 'Alida Brigitte Albarracín Veloza', role: 'Líder de seguridad', email: 'brigitte@cafam.com.co' });
+repo.addPocAdmin(cafam.id, { name: 'Andrés Gómez', role: 'Analista SOC' });
 const escribir = repo.createItem({
 	category: 'poc',
 	poc_id: cafam.id,
@@ -102,7 +104,14 @@ at(0, '09:31');
 repo.createItem({ category: 'poc', poc_id: cafam.id, title: 'Preparar el kickoff de la PoC' });
 
 at(-12);
-const corp = repo.createPoc({ name: 'Corporación América', company: 'Aeropuertos Argentinos', country: 'AR' });
+const corp = repo.createPoc({
+	name: 'Corporación América',
+	company: 'Aeropuertos Argentinos',
+	country: 'AR',
+	owner: 'Daniel San Martín',
+	start_date: day(-5),
+});
+repo.addPocAdmin(corp.id, { name: 'Matías', role: 'IT', email: 'matias@aa2000.com.ar' });
 const matias = repo.createItem({ category: 'poc', poc_id: corp.id, title: 'Escribir a Matías para agendar la llamada de la PoC', contact: 'Matías' });
 at(-8);
 repo.touchItem(matias.id, { channel: 'email', body: 'Escrito a Matías', next_date: day(-5) });

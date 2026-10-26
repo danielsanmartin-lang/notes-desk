@@ -540,8 +540,11 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 		  (SELECT COUNT(*) FROM items i WHERE i.poc_id = p.id AND i.parent_id IS NULL AND i.deleted_at IS NULL AND i.state = 'done') AS done,
 		  (SELECT COUNT(*) FROM items i WHERE i.poc_id = p.id AND i.deleted_at IS NULL AND i.state = 'waiting') AS waiting,
 		  (SELECT max(a.occurred_at) FROM activity a LEFT JOIN items i ON i.id = a.item_id
-		    WHERE a.poc_id = p.id OR i.poc_id = p.id) AS last_activity_at
+		    WHERE a.poc_id = p.id OR i.poc_id = p.id) AS last_activity_at,
+		  (SELECT COUNT(*) FROM poc_admins pa WHERE pa.poc_id = p.id) AS admin_count
 		FROM pocs p`;
+
+	const pocAdmins = (pocId) => all('SELECT * FROM poc_admins WHERE poc_id = @poc ORDER BY sort_order, id', { poc: pocId });
 
 	const nextTask = (pocId) =>
 		itemOut(
@@ -567,7 +570,7 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 			 ORDER BY a.occurred_at DESC, a.id DESC LIMIT 300`,
 			{ id },
 		).map(activityOut);
-		return { poc: { ...poc, next: nextTask(id) }, activity };
+		return { poc: { ...poc, next: nextTask(id) }, admins: pocAdmins(id), activity };
 	}
 
 	function normalizePoc(data) {
@@ -578,6 +581,12 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 			out.name = n.slice(0, 200);
 		}
 		for (const k of ['company', 'notes']) if (k in data) out[k] = emptyToNull(data[k]);
+		if ('owner' in data) out.owner = emptyToNull(data.owner)?.slice(0, 120) ?? null;
+		if ('start_date' in data) {
+			const v = emptyToNull(data.start_date);
+			if (v && !isValidDate(v)) throw bad('Fecha de inicio no válida');
+			out.start_date = v;
+		}
 		if ('country' in data) {
 			const c = emptyToNull(data.country);
 			if (c && !/^[A-Za-z]{2}$/.test(c)) throw bad('El país va en dos letras (ES, CO, AR…)');
@@ -644,6 +653,52 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 		if ('sort_order' in (data ?? {})) d.sort_order = Number(data.sort_order);
 		updateRow('pocs', id, { ...d, updated_at: ts() });
 		return getPoc(id).poc;
+	}
+
+	// ── Admins del cliente en la PoC (los que usarán la plataforma) ──
+
+	function normalizeAdmin(data) {
+		const out = {};
+		if ('name' in data) {
+			const n = String(data.name ?? '').trim();
+			if (!n) throw bad('El admin necesita un nombre');
+			out.name = n.slice(0, 200);
+		}
+		if ('email' in data) {
+			const e = emptyToNull(data.email);
+			if (e && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) throw bad('Ese email no parece válido');
+			out.email = e ? e.toLowerCase() : null;
+		}
+		if ('role' in data) out.role = emptyToNull(data.role)?.slice(0, 120) ?? null;
+		return out;
+	}
+
+	function addPocAdmin(pocId, data) {
+		requirePoc(pocId);
+		const d = normalizeAdmin(data ?? {});
+		if (!d.name) throw bad('El admin necesita un nombre');
+		const row = {
+			email: null,
+			role: null,
+			...d,
+			poc_id: pocId,
+			sort_order: get('SELECT coalesce(max(sort_order), 0) + 1 AS s FROM poc_admins WHERE poc_id = @poc', { poc: pocId }).s,
+			created_at: ts(),
+		};
+		const cols = Object.keys(row);
+		const id = run(`INSERT INTO poc_admins (${cols.join(', ')}) VALUES (${cols.map((c) => '@' + c).join(', ')})`, row)
+			.lastInsertRowid;
+		return get('SELECT * FROM poc_admins WHERE id = @id', { id });
+	}
+
+	function updatePocAdmin(id, data) {
+		if (!get('SELECT id FROM poc_admins WHERE id = @id', { id })) throw notFound('El admin');
+		updateRow('poc_admins', id, normalizeAdmin(data ?? {}));
+		return get('SELECT * FROM poc_admins WHERE id = @id', { id });
+	}
+
+	function deletePocAdmin(id) {
+		if (!run('DELETE FROM poc_admins WHERE id = @id', { id }).changes) throw notFound('El admin');
 	}
 
 	function setPocStatus(id, { status, paused_until = null, body = null } = {}) {
@@ -735,8 +790,13 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 			 ORDER BY (i.state = 'done'), f.rank LIMIT 30`,
 			{ match },
 		).map(itemOut);
+		const admins = new Map(
+			all(`SELECT poc_id, group_concat(name || ' ' || coalesce(email, ''), ' ') AS hay FROM poc_admins GROUP BY poc_id`).map(
+				(r) => [r.poc_id, r.hay],
+			),
+		);
 		const pocs = listPocs().filter((p) => {
-			const hay = fold(`${p.name} ${p.company ?? ''}`);
+			const hay = fold(`${p.name} ${p.company ?? ''} ${p.owner ?? ''} ${admins.get(p.id) ?? ''}`);
 			return tokens.every((t) => hay.includes(t));
 		});
 		return { items, pocs };
@@ -754,7 +814,10 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 			 WHERE contact IS NOT NULL AND deleted_at IS NULL
 			 GROUP BY lower(contact) ORDER BY n DESC, value LIMIT 300`,
 		).map((r) => ({ value: r.value, company: r.company }));
-		return { companies, contacts };
+		const owners = all(
+			`SELECT owner AS value, COUNT(*) AS n FROM pocs WHERE owner IS NOT NULL GROUP BY lower(owner) ORDER BY n DESC, value`,
+		).map((r) => r.value);
+		return { companies, contacts, owners };
 	}
 
 	// ── Mantenimiento y avisos ─────────────────────────────────────────────────
@@ -806,6 +869,9 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 		updatePoc,
 		setPocStatus,
 		deletePoc,
+		addPocAdmin,
+		updatePocAdmin,
+		deletePocAdmin,
 		applyHubspotDeal,
 		listWeeks,
 		getWeek,

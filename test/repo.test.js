@@ -187,3 +187,30 @@ test('recordatorios pendientes', () => {
 	repo.updateItem(t.id, { remind_at: '2026-10-26T09:45' });
 	assert.equal(repo.dueReminders().length, 1, 'cambiar la hora reactiva el aviso');
 });
+
+test('ficha de la PoC: owner, fecha de inicio y admins del cliente', () => {
+	const poc = repo.createPoc({ name: 'Cafam', owner: 'Daniel', start_date: '2026-11-03' });
+	assert.equal(poc.owner, 'Daniel');
+	assert.equal(poc.start_date, '2026-11-03');
+	assert.equal(poc.admin_count, 0);
+	assert.throws(() => repo.updatePoc(poc.id, { start_date: '3 nov' }), /inicio/);
+
+	const brigitte = repo.addPocAdmin(poc.id, { name: 'Alida Brigitte Albarracín', email: 'Brigitte@Cafam.com.co', role: 'CISO' });
+	assert.equal(brigitte.email, 'brigitte@cafam.com.co');
+	repo.addPocAdmin(poc.id, { name: 'Carlos Ruiz' });
+	assert.throws(() => repo.addPocAdmin(poc.id, { name: 'X', email: 'no-es-email' }), /email/);
+	assert.throws(() => repo.addPocAdmin(poc.id, { email: 'a@b.co' }), /nombre/);
+
+	const detail = repo.getPoc(poc.id);
+	assert.equal(detail.poc.admin_count, 2);
+	assert.deepEqual(detail.admins.map((a) => a.name), ['Alida Brigitte Albarracín', 'Carlos Ruiz']);
+	assert.equal(repo.updatePocAdmin(brigitte.id, { role: 'Responsable de seguridad' }).role, 'Responsable de seguridad');
+	repo.deletePocAdmin(brigitte.id);
+	assert.equal(repo.getPoc(poc.id).admins.length, 1);
+
+	assert.equal(repo.search('carlos').pocs.length, 1, 'se encuentra la PoC por sus admins');
+	assert.equal(repo.search('daniel').pocs.length, 1, 'y por su owner');
+	assert.deepEqual(repo.suggestions().owners, ['Daniel']);
+	repo.deletePoc(poc.id);
+	assert.equal(repo.search('carlos').pocs.length, 0, 'los admins se borran con la PoC');
+});

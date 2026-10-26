@@ -85,6 +85,12 @@ export function startServer({ repo, port = 0, token = null, staticDir = null, me
 	});
 	r.post('/pocs/:id/status', (req, res) => res.json(repo.setPocStatus(id(req), req.body ?? {})));
 	r.post('/pocs/:id/note', (req, res) => res.status(201).json(repo.addNote({ poc_id: id(req), body: req.body?.body })));
+	r.post('/pocs/:id/admins', (req, res) => res.status(201).json(repo.addPocAdmin(id(req), req.body)));
+	r.patch('/poc-admins/:id', (req, res) => res.json(repo.updatePocAdmin(id(req), req.body)));
+	r.delete('/poc-admins/:id', (req, res) => {
+		repo.deletePocAdmin(id(req));
+		res.json({ ok: true });
+	});
 	r.post('/pocs/:id/hubspot/sync', async (req, res) => {
 		const { poc } = repo.getPoc(id(req));
 		if (!poc.hubspot_deal_id) throw new HttpError(400, 'Esta PoC no tiene deal de HubSpot');

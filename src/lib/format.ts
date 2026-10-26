@@ -40,6 +40,15 @@ export const money = (n: number | null) => (n == null ? null : MONEY.format(n));
 export const longDate = (s: string) =>
 	new Intl.DateTimeFormat('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }).format(parseDate(s));
 
+/** "Alida Brigitte Albarracín" → "AA" */
+export const initials = (name: string) =>
+	name
+		.split(/\s+/)
+		.filter(Boolean)
+		.slice(0, 2)
+		.map((w) => w[0]!.toUpperCase())
+		.join('');
+
 export const capFirst = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export const cx = (...xs: (string | false | null | undefined)[]) => xs.filter(Boolean).join(' ');

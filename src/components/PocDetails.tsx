@@ -1,0 +1,185 @@
+// Ficha de la PoC: owner, fecha de inicio y admins del cliente (los que usarán la plataforma).
+
+import { CalendarDays, Copy, Mail, Plus, UserRound, Users, X } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
+import { useState, type KeyboardEvent, type ReactNode } from 'react';
+import { toast } from 'sonner';
+import { daysBetween, formatDay } from '../../shared/dates.js';
+import { useActions } from '../api/hooks';
+import type { Poc, PocAdmin } from '../api/types';
+import { openExternal } from '../lib/bridge';
+import { cx, initials, plural } from '../lib/format';
+import { Chip } from './bits';
+import { DatePicker } from './DatePicker';
+import { Button, IconButton, inputClass, SectionTitle, useDraft } from './ui';
+
+/** "Día 12" si ya empezó, "Empieza en 3 días" si no. */
+export function pocDayLabel(start: string | null, today: string) {
+	if (!start) return null;
+	const diff = daysBetween(start, today);
+	if (diff >= 0) return `Día ${diff + 1}`;
+	return diff === -1 ? 'Empieza mañana' : `Empieza en ${-diff} días`;
+}
+
+export function Avatar({ name, color, size = 26 }: { name: string; color?: string | null; size?: number }) {
+	return (
+		<span
+			className="inline-flex shrink-0 items-center justify-center rounded-full font-semibold text-white"
+			style={{ width: size, height: size, fontSize: size * 0.4, background: color ?? 'var(--accent)' }}
+			aria-hidden="true"
+		>
+			{initials(name) || '?'}
+		</span>
+	);
+}
+
+function Fact({ icon, label, children }: { icon: ReactNode; label: string; children: ReactNode }) {
+	return (
+		<div className="min-w-0 rounded-xl bg-hover px-3 py-2.5">
+			<div className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-fg-3 [&>svg]:size-3.5">
+				{icon}
+				{label}
+			</div>
+			{children}
+		</div>
+	);
+}
+
+export function PocFacts({ poc, adminCount, today }: { poc: Poc; adminCount: number; today: string }) {
+	const a = useActions();
+	const owner = useDraft(poc.owner, (v) => a.updatePoc(poc.id, { owner: v }));
+	const day = pocDayLabel(poc.start_date, today);
+
+	return (
+		<div className="mb-4 grid grid-cols-3 gap-2.5">
+			<Fact icon={<UserRound />} label="Owner">
+				<div className="flex items-center gap-2">
+					{poc.owner && <Avatar name={poc.owner} color={poc.color} size={22} />}
+					<input
+						{...owner}
+						list="zd-owners"
+						placeholder="¿Quién la lleva?"
+						onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+						className="h-6 min-w-0 flex-1 bg-transparent text-[13px] font-medium outline-none placeholder:font-normal placeholder:text-fg-3"
+					/>
+				</div>
+			</Fact>
+			<Fact icon={<CalendarDays />} label="Fecha de inicio">
+				<DatePicker
+					value={poc.start_date}
+					onChange={(v) => a.updatePoc(poc.id, { start_date: v })}
+					trigger={
+						<button type="button" className="flex h-6 w-full items-center gap-2 text-left">
+							<span className={cx('text-[13px]', poc.start_date ? 'font-medium' : 'text-fg-3')}>
+								{poc.start_date ? formatDay(poc.start_date, today) : 'Sin fecha'}
+							</span>
+							{day && <Chip tone={day.startsWith('Día') ? 'accent' : 'neutral'}>{day}</Chip>}
+						</button>
+					}
+				/>
+			</Fact>
+			<Fact icon={<Users />} label="Admins del cliente">
+				<div className="flex h-6 items-center text-[13px] font-medium">
+					{adminCount ? plural(adminCount, 'admin', 'admins') : <span className="font-normal text-fg-3">Ninguno todavía</span>}
+				</div>
+			</Fact>
+		</div>
+	);
+}
+
+function AdminRow({ admin, color }: { admin: PocAdmin; color: string | null }) {
+	const a = useActions();
+	const name = useDraft(admin.name, (v) => v && a.updateAdmin(admin.id, { name: v }));
+	const role = useDraft(admin.role, (v) => a.updateAdmin(admin.id, { role: v }));
+	const email = useDraft(admin.email, (v) => a.updateAdmin(admin.id, { email: v }));
+	const blurOnEnter = (e: KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && e.currentTarget.blur();
+	const field = 'h-6 min-w-0 rounded-md bg-transparent px-1 outline-none hover:bg-hover focus:bg-hover';
+
+	return (
+		<motion.div
+			layout
+			initial={{ opacity: 0, y: -4 }}
+			animate={{ opacity: 1, y: 0 }}
+			exit={{ opacity: 0, height: 0 }}
+			className="group flex items-center gap-3 rounded-xl px-2 py-1.5 hover:bg-hover"
+		>
+			<Avatar name={admin.name} color={color} size={30} />
+			<div className="grid min-w-0 flex-1 grid-cols-[1.5fr_1fr_1.3fr] items-center gap-2">
+				<input {...name} onKeyDown={blurOnEnter} className={cx(field, 'text-[13px] font-medium')} />
+				<input {...role} onKeyDown={blurOnEnter} placeholder="Cargo" className={cx(field, 'text-[12.5px] text-fg-2 placeholder:text-fg-3')} />
+				<input {...email} onKeyDown={blurOnEnter} placeholder="email" className={cx(field, 'text-[12.5px] text-fg-2 placeholder:text-fg-3')} />
+			</div>
+			<div className="flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100">
+				{admin.email && (
+					<IconButton label={`Escribir a ${admin.email}`} onClick={() => openExternal(`mailto:${admin.email}`)}>
+						<Mail className="size-3.5" />
+					</IconButton>
+				)}
+				<IconButton
+					label="Quitar admin"
+					onClick={async () => {
+						await a.deleteAdmin(admin.id);
+						toast('Admin quitado', {
+							description: admin.name,
+							action: { label: 'Deshacer', onClick: () => a.addAdmin(admin.poc_id, admin) },
+						});
+					}}
+				>
+					<X className="size-3.5" />
+				</IconButton>
+			</div>
+		</motion.div>
+	);
+}
+
+export function PocAdmins({ poc, admins }: { poc: Poc; admins: PocAdmin[] }) {
+	const a = useActions();
+	const [form, setForm] = useState({ name: '', role: '', email: '' });
+	const emails = admins.map((x) => x.email).filter(Boolean) as string[];
+
+	const add = async () => {
+		if (!form.name.trim()) return;
+		await a.addAdmin(poc.id, form);
+		setForm({ name: '', role: '', email: '' });
+	};
+
+	const copyEmails = async () => {
+		await navigator.clipboard.writeText(emails.join(', '));
+		toast.success(plural(emails.length, 'email copiado', 'emails copiados'), { description: 'Listos para pegar en la invitación.' });
+	};
+
+	const set = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm({ ...form, [k]: e.target.value });
+	const onKey = (e: KeyboardEvent) => e.key === 'Enter' && add();
+
+	return (
+		<div className="mt-8">
+			<SectionTitle
+				right={
+					emails.length > 0 && (
+						<Button size="xs" variant="ghost" icon={<Copy className="size-3" />} onClick={copyEmails}>
+							Copiar emails
+						</Button>
+					)
+				}
+			>
+				Admins del cliente
+			</SectionTitle>
+			<p className="mb-2 text-[12px] text-fg-3">Quienes van a usar la plataforma durante la PoC.</p>
+			<div className="flex flex-col">
+				<AnimatePresence initial={false}>
+					{admins.map((admin) => (
+						<AdminRow key={admin.id} admin={admin} color={poc.color} />
+					))}
+				</AnimatePresence>
+			</div>
+			<div className="mt-2 flex items-center gap-2">
+				<input value={form.name} onChange={set('name')} onKeyDown={onKey} placeholder="Nombre" className={cx(inputClass, 'flex-[1.5]')} />
+				<input value={form.role} onChange={set('role')} onKeyDown={onKey} placeholder="Cargo" className={cx(inputClass, 'flex-1')} />
+				<input value={form.email} onChange={set('email')} onKeyDown={onKey} placeholder="email@cliente.com" className={cx(inputClass, 'flex-[1.3]')} />
+				<Button onClick={add} disabled={!form.name.trim()} icon={<Plus className="size-3.5" />}>
+					Añadir
+				</Button>
+			</div>
+		</div>
+	);
+}

@@ -12,6 +12,7 @@ import type {
 	ItemList,
 	Meta,
 	Poc,
+	PocAdmin,
 	Settings,
 	Suggestions,
 	WeekDetail,
@@ -32,7 +33,7 @@ export const useItem = (id: number | null) =>
 export const useCounts = () => useQuery({ queryKey: ['counts'], queryFn: () => api<Counts>('/counts') });
 export const usePocs = () => useQuery({ queryKey: ['pocs'], queryFn: () => api<Poc[]>('/pocs') });
 export const usePoc = (id: number) =>
-	useQuery({ queryKey: ['poc', id], queryFn: () => api<{ poc: Poc; activity: Activity[] }>(`/pocs/${id}`), retry: false });
+	useQuery({ queryKey: ['poc', id], queryFn: () => api<{ poc: Poc; admins: PocAdmin[]; activity: Activity[] }>(`/pocs/${id}`), retry: false });
 export const useWeeks = () => useQuery({ queryKey: ['weeks'], queryFn: () => api<WeekSummary[]>('/weeks') });
 export const useWeek = (week: string | undefined) =>
 	useQuery({ queryKey: ['week', week], queryFn: () => api<WeekDetail>(`/weeks/${week}`), enabled: !!week });
@@ -104,6 +105,10 @@ export function useActions() {
 				post<Poc>(`/pocs/${id}/status`, body),
 			deletePoc: (id: number) => run(api(`/pocs/${id}`, { method: 'DELETE' })),
 			pocNote: (id: number, body: string) => post<Activity>(`/pocs/${id}/note`, { body }),
+			addAdmin: (pocId: number, data: Partial<PocAdmin>) => post<PocAdmin>(`/pocs/${pocId}/admins`, data),
+			updateAdmin: (id: number, data: Partial<PocAdmin>) =>
+				run(api<PocAdmin>(`/poc-admins/${id}`, { method: 'PATCH', body: data })),
+			deleteAdmin: (id: number) => run(api(`/poc-admins/${id}`, { method: 'DELETE' })),
 			syncHubspot: (id: number) => post<Poc>(`/pocs/${id}/hubspot/sync`),
 			saveSettings: (patch: Partial<Settings>) => run(api<Settings>('/settings', { method: 'PATCH', body: patch })),
 		};

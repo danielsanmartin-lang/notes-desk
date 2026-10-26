@@ -91,11 +91,24 @@ export interface Poc {
 	created_at: string;
 	updated_at: string;
 	closed_at: string | null;
+	owner: string | null;
+	start_date: string | null;
+	admin_count: number;
 	total: number;
 	done: number;
 	waiting: number;
 	last_activity_at: string | null;
 	next: Item | null;
+}
+
+export interface PocAdmin {
+	id: number;
+	poc_id: number;
+	name: string;
+	email: string | null;
+	role: string | null;
+	sort_order: number;
+	created_at: string;
 }
 
 export interface Counts {
@@ -155,6 +168,7 @@ export interface Settings {
 export interface Suggestions {
 	companies: string[];
 	contacts: { value: string; company: string | null }[];
+	owners: string[];
 }
 
 export interface Meta {
