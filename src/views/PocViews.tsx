@@ -4,6 +4,7 @@ import {
 	ExternalLink,
 	FlaskConical,
 	Link2,
+	ListChecks,
 	Pause,
 	Play,
 	Plus,
@@ -408,12 +409,10 @@ export const ClosedPocsView = () => <PocBoard closed />;
 export function NewPocDialog() {
 	const { newPocOpen, setNewPocOpen, go } = useUI();
 	const a = useActions();
-	const { data: settings } = useSettings();
-	const empty = { name: '', company: '', country: '', partner: '', owner: '', start_date: '', hubspot: '', amount: '', currency: 'EUR', use_template: true };
+	const empty = { name: '', company: '', country: '', partner: '', owner: '', start_date: '', hubspot: '', amount: '', currency: 'EUR' };
 	const [form, setForm] = useState(empty);
 	// La divisa sigue al país (EUR en Iberia, USD en LATAM) hasta que la cambias a mano.
 	const [currencyTouched, setCurrencyTouched] = useState(false);
-	const templateCount = (settings?.poc_template ?? '').split('\n').filter((l) => l.trim()).length;
 	const set = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm({ ...form, [k]: e.target.value });
 
 	const submit = async () => {
@@ -422,7 +421,6 @@ export function NewPocDialog() {
 		const poc = await a.createPoc({
 			...rest,
 			...(amount.trim() ? { amount: amount as unknown as number } : {}),
-			use_template: form.use_template && templateCount > 0,
 		});
 		setNewPocOpen(false);
 		setForm(empty);
@@ -508,17 +506,6 @@ export function NewPocDialog() {
 						<input value={form.hubspot} onChange={set('hubspot')} placeholder="Pega el enlace del deal o su ID" className={inputClass} />
 					</label>
 				</div>
-				{templateCount > 0 && (
-					<label className="flex items-center gap-2 text-[12.5px] text-fg-2">
-						<input
-							type="checkbox"
-							checked={form.use_template}
-							onChange={(e) => setForm({ ...form, use_template: e.target.checked })}
-							className="size-4 accent-[var(--accent)]"
-						/>
-						Empezar con la checklist de plantilla ({plural(templateCount, 'tarea', 'tareas')})
-					</label>
-				)}
 				<div className="flex justify-end gap-2 pt-2">
 					<Button type="button" onClick={() => setNewPocOpen(false)}>
 						Cancelar
@@ -729,6 +716,28 @@ function HubspotCard({ poc, today }: { poc: Poc; today: string }) {
 	);
 }
 
+/** En una PoC sin tareas, ofrece la checklist de plantilla (ya no se crea sola al dar de alta la PoC). */
+function TemplateButton({ pocId }: { pocId: number }) {
+	const a = useActions();
+	const { data: settings } = useSettings();
+	const lines = (settings?.poc_template ?? '').split('\n').map((l) => l.trim()).filter(Boolean);
+	if (!lines.length) return null;
+	return (
+		<div className="mb-3 px-2.5">
+			<Button
+				size="sm"
+				variant="ghost"
+				icon={<ListChecks className="size-3.5" />}
+				onClick={async () => {
+					for (const title of lines) await a.create({ category: 'poc', poc_id: pocId, title });
+				}}
+			>
+				Usar la checklist de plantilla ({plural(lines.length, 'tarea', 'tareas')})
+			</Button>
+		</div>
+	);
+}
+
 export function PocView({ id }: { id: number }) {
 	const today = useToday();
 	const { data, isError } = usePoc(id);
@@ -890,6 +899,7 @@ export function PocView({ id }: { id: number }) {
 				</div>
 
 				<Composer lockCategory defaults={{ category: 'poc', poc_id: poc.id }} placeholder="Añadir tarea a la PoC… (prueba «Kickoff con Brigitte el jueves»)" />
+				{list && !items.length && !list.done.length && <TemplateButton pocId={poc.id} />}
 				<TaskList items={items} today={today} options={{ sortable: true, listKey: `poc-${poc.id}`, queryKey: ['items', 'poc', { poc: poc.id }] }} />
 				<DoneSection items={list?.done ?? []} today={today} title="Hechas" defaultOpen />
 

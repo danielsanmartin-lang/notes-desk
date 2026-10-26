@@ -156,6 +156,16 @@ function DetailBody({
 				</button>
 				{item.parent_title && <span className="truncate text-[11.5px] text-fg-3">↳ {item.parent_title}</span>}
 				<div className="ml-auto flex items-center gap-0.5">
+					<IconButton
+						label="Borrar (va a la papelera)"
+						onClick={() => {
+							ops.remove(item);
+							select(null);
+						}}
+						className="hover:bg-danger-soft hover:text-danger"
+					>
+						<Trash2 className="size-4" />
+					</IconButton>
 					<Menu
 						trigger={
 							<IconButton label="Más acciones">

@@ -1,6 +1,6 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { CornerDownRight, GripVertical, ListChecks, Send, StickyNote } from 'lucide-react';
+import { CornerDownRight, GripVertical, ListChecks, Send, StickyNote, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useState } from 'react';
 import { useActions } from '../api/hooks';
@@ -143,6 +143,21 @@ export function TaskRow({ item, today, options = {} }: { item: Item; today: stri
 					<span className={cx(!item.flagged && 'opacity-0 group-hover:opacity-100')}>
 						<FlagStar on={item.flagged} onClick={() => a.update(item.id, { flagged: !item.flagged })} />
 					</span>
+				)}
+				{!item.deleted_at && (
+					<button
+						type="button"
+						onClick={(e) => {
+							e.stopPropagation();
+							if (selected) select(null);
+							ops.remove(item);
+						}}
+						aria-label="Borrar"
+						title="Borrar (va a la papelera, ⌘⌫)"
+						className="flex size-6 items-center justify-center rounded-md text-fg-3 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-danger-soft hover:text-danger"
+					>
+						<Trash2 className="size-3.5" />
+					</button>
 				)}
 			</div>
 		</motion.div>
