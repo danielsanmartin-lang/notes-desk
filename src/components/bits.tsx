@@ -4,6 +4,7 @@ import { Bell, Building2, Hourglass, Mail, MessageCircle, Phone, Star, User, Vid
 import { motion } from 'motion/react';
 import type { ReactNode } from 'react';
 import { daysBetween, relativeDay, waitingLevel } from '../../shared/dates.js';
+import { fold } from '../../shared/quickparse.js';
 import type { Channel, Item } from '../api/types';
 import { CHANNEL_LABEL, cx, daysWaiting, timeOf } from '../lib/format';
 
@@ -154,6 +155,45 @@ export const ReminderChip = ({ at, today }: { at: string; today: string }) => (
 	</Chip>
 );
 
+/** Resalta en `text` las palabras buscadas (ya plegadas: sin mayúsculas ni acentos). */
+export function Highlight({ text, terms }: { text: string; terms?: string[] }) {
+	if (!terms?.length) return <>{text}</>;
+	// Se pliega carácter a carácter para saber a qué letra del original corresponde cada posición.
+	const chars = [...text];
+	let folded = '';
+	const origin: number[] = [];
+	chars.forEach((c, i) => {
+		const f = fold(c);
+		folded += f;
+		for (let k = 0; k < f.length; k++) origin.push(i);
+	});
+	const marked = new Array<boolean>(chars.length).fill(false);
+	for (const t of terms) {
+		for (let at = folded.indexOf(t); at !== -1; at = folded.indexOf(t, at + t.length)) {
+			for (let k = at; k < at + t.length; k++) marked[origin[k]] = true;
+		}
+	}
+	const parts: { text: string; mark: boolean }[] = [];
+	chars.forEach((c, i) => {
+		const last = parts[parts.length - 1];
+		if (last && last.mark === marked[i]) last.text += c;
+		else parts.push({ text: c, mark: marked[i] });
+	});
+	return (
+		<>
+			{parts.map((p, i) =>
+				p.mark ? (
+					<mark key={i} className="rounded-[3px] bg-warn-soft text-fg [box-decoration-break:clone]">
+						{p.text}
+					</mark>
+				) : (
+					p.text
+				),
+			)}
+		</>
+	);
+}
+
 export const PocDot = ({ color, className = 'size-2' }: { color: string | null; className?: string }) => (
 	<span className={cx('inline-block shrink-0 rounded-full', className)} style={{ background: color ?? 'var(--fg-3)' }} />
 );
@@ -169,9 +209,11 @@ export const WhoChip = ({
 	contact,
 	onCompany,
 	companyTitle,
+	highlight,
 }: {
 	company: string | null;
 	contact: string | null;
+	highlight?: string[];
 	/** Si se pasa, el nombre de la empresa es un enlace (a HubSpot o a la cuenta). */
 	onCompany?: () => void;
 	companyTitle?: string;
@@ -189,12 +231,21 @@ export const WhoChip = ({
 					}}
 					className="truncate rounded-sm hover:text-accent-text hover:underline"
 				>
-					{company}
+					<Highlight text={company} terms={highlight} />
 				</button>
 			) : (
-				company && <span className="truncate">{company}</span>
+				company && (
+					<span className="truncate">
+						<Highlight text={company} terms={highlight} />
+					</span>
+				)
 			)}
-			{contact && <span className="truncate">{company ? `· ${contact}` : contact}</span>}
+			{contact && (
+				<span className="truncate">
+					{company && '· '}
+					<Highlight text={contact} terms={highlight} />
+				</span>
+			)}
 		</span>
 	) : null;
 
@@ -206,7 +257,7 @@ export const FlagStar = ({ on, onClick }: { on: boolean; onClick?: () => void })
 			onClick?.();
 		}}
 		aria-label={on ? 'Quitar destacada' : 'Destacar'}
-		title={on ? 'Quitar destacada' : 'Destacar (aparece en Hoy)'}
+		title={on ? 'Quitar destacada' : 'Destacar (aparece en Inicio)'}
 		className={cx('flex size-6 items-center justify-center rounded-md transition-colors hover:bg-hover', on ? 'text-warn' : 'text-fg-3')}
 	>
 		<Star className="size-3.5" fill={on ? 'currentColor' : 'none'} />

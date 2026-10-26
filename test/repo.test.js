@@ -100,7 +100,7 @@ test('vistas Hoy, Próximos, Follow-ups y Tareas', () => {
 test('PoCs: plantilla, progreso, pausa hasta Q1 y reanudación automática', () => {
 	const poc = repo.createPoc({ name: 'Corporación América', company: 'Aeropuertos Argentinos', country: 'ar' }, { useTemplate: true });
 	assert.equal(poc.country, 'AR');
-	assert.equal(poc.total, 5);
+	assert.equal(poc.total, 3);
 	const first = repo.listItems('poc', { pocId: poc.id }).items[0];
 	repo.updateItem(first.id, { due_date: '2026-10-26' });
 	repo.completeItem(repo.listItems('poc', { pocId: poc.id }).items[1].id);
@@ -115,6 +115,13 @@ test('PoCs: plantilla, progreso, pausa hasta Q1 y reanudación automática', () 
 	assert.equal(repo.getPoc(poc.id).poc.status, 'active');
 	const kinds = repo.getPoc(poc.id).activity.map((a) => a.kind);
 	assert.ok(kinds.includes('paused') && kinds.includes('resumed') && kinds.includes('done'));
+
+	// «Pausar» sin fecha: sigue en pausa hasta que se reactive a mano.
+	repo.setPocStatus(poc.id, { status: 'paused' });
+	at('2027-06-01T08:00:00');
+	assert.equal(repo.housekeeping(), 0);
+	assert.equal(repo.getPoc(poc.id).poc.status, 'paused');
+	assert.equal(repo.getPoc(poc.id).poc.paused_until, null);
 });
 
 test('subtareas heredan categoría y PoC; mover una tarea a una PoC mueve sus subtareas', () => {
@@ -384,4 +391,30 @@ test('enlace de HubSpot de una cuenta, visible en sus tareas', () => {
 	assert.throws(() => repo.setAccountHubspot('BCI', 'https://google.com'), /No reconozco/);
 	assert.equal(repo.setAccountHubspot('BCI', '').hubspot_url, null);
 	assert.throws(() => repo.setAccountHubspot('Nadie', '1'), /no existe/);
+});
+
+test('buscador del Inicio: título, notas, PoC e historial, sin acentos ni mayúsculas', () => {
+	const poc = repo.createPoc({ name: 'Primax', company: 'Primax', country: 'PE' });
+	const kickoff = repo.createItem({ category: 'poc', poc_id: poc.id, title: 'Kickoff con Brigitte' });
+	const fup = repo.createItem({ category: 'followup', title: 'Llamar a Catalina', company: 'BCI', notes: 'Le interesa la integración con Okta' });
+	repo.touchItem(fup.id, { body: 'Mandada la propuesta económica' });
+	const done = repo.createItem({ category: 'task', title: 'Preparar demo Primax' });
+	repo.completeItem(done.id);
+	const trashed = repo.createItem({ category: 'task', title: 'Primax borrada' });
+	repo.deleteItem(trashed.id);
+
+	const primax = repo.searchItems('primax');
+	assert.deepEqual(primax.items.map((i) => i.id), [kickoff.id], 'por el nombre de su PoC, sin las de la papelera');
+	assert.deepEqual(primax.done.map((i) => i.id), [done.id]);
+
+	const okta = repo.searchItems('INTEGRACION okta');
+	assert.deepEqual(okta.items.map((i) => i.id), [fup.id]);
+	assert.equal(okta.items[0].snippet, 'Le interesa la integración con Okta');
+
+	const hist = repo.searchItems('catalina económica');
+	assert.deepEqual(hist.items.map((i) => i.id), [fup.id], 'todas las palabras, aunque estén en sitios distintos');
+	assert.equal(hist.items[0].snippet, 'Mandada la propuesta económica');
+
+	assert.equal(repo.searchItems('catalina primax').items.length, 0);
+	assert.deepEqual(repo.searchItems('  '), { items: [], done: [] });
 });

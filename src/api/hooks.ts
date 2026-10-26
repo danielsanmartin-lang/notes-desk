@@ -60,6 +60,14 @@ export const useSearch = (q: string) =>
 		enabled: q.trim().length > 0,
 		placeholderData: (prev) => prev,
 	});
+/** Buscador del Inicio. Va bajo 'items' para refrescarse con cada cambio en las tareas. */
+export const useSearchItems = (q: string) =>
+	useQuery({
+		queryKey: ['items', 'search', q],
+		queryFn: () => api<ItemList>(`/search/items?${qs({ q })}`),
+		enabled: q.trim().length > 0,
+		placeholderData: (prev) => prev,
+	});
 export const useSuggestions = () =>
 	useQuery({ queryKey: ['suggestions'], queryFn: () => api<Suggestions>('/suggestions'), staleTime: 30_000 });
 export const useSettings = () => useQuery({ queryKey: ['settings'], queryFn: () => api<Settings>('/settings') });

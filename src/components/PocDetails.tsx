@@ -18,7 +18,7 @@ import { Button, IconButton, inputClass, SectionTitle, useDraft } from './ui';
 export function OpenDays({ poc, today }: { poc: Poc; today: string }) {
 	const o = openSince(poc, today);
 	return (
-		<Chip tone={o.future ? 'neutral' : 'accent'} icon={<Clock />} title={poc.start_date ? 'Desde la fecha de inicio' : 'Desde que se creó (no tiene fecha de inicio)'}>
+		<Chip tone={o.future ? 'neutral' : 'accent'} icon={<Clock />} title={`${poc.start_date ? 'Desde la fecha de inicio' : 'Desde que se creó (no tiene fecha de inicio)'}${poc.status === 'paused' ? '. Sigue contando aunque esté en pausa.' : ''}`}>
 			{o.label}
 		</Chip>
 	);

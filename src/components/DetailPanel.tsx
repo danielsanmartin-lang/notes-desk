@@ -352,7 +352,7 @@ function DetailBody({
 								className={cx('inline-flex h-7 items-center gap-1.5 rounded-lg px-2 text-[12.5px] hover:bg-hover', item.flagged ? 'text-warn' : 'text-fg-3')}
 							>
 								<Star className="size-3.5" fill={item.flagged ? 'currentColor' : 'none'} />
-								{item.flagged ? 'Sí, aparece en Hoy' : 'No'}
+								{item.flagged ? 'Sí, aparece en Inicio' : 'No'}
 							</button>
 						</Row>
 					)}

@@ -9,7 +9,7 @@ import { openExternal } from '../lib/bridge';
 import { cx, plural } from '../lib/format';
 import { useItemOps } from '../lib/ops';
 import { useUI } from '../lib/store';
-import { ChannelIcon, Checkbox, Chip, DueChip, FlagStar, PocTag, ReminderChip, WaitingChip, WhoChip } from './bits';
+import { ChannelIcon, Checkbox, Chip, DueChip, FlagStar, Highlight, PocTag, ReminderChip, WaitingChip, WhoChip } from './bits';
 
 export interface RowOptions {
 	showPoc?: boolean;
@@ -21,6 +21,8 @@ export interface RowOptions {
 	queryKey?: readonly unknown[];
 	/** Enseñar las subtareas abiertas debajo (por defecto sí; en Hoy y Próximos salen como filas propias). */
 	nested?: boolean;
+	/** Palabras buscadas que se resaltan (buscador del Inicio). */
+	highlight?: string[];
 }
 
 export function TaskRow({ item, today, options = {} }: { item: Item; today: string; options?: RowOptions }) {
@@ -99,18 +101,27 @@ export function TaskRow({ item, today, options = {} }: { item: Item; today: stri
 									<span className="mr-1.5 inline-block translate-y-[-1px] rounded-[5px] bg-accent-soft px-1.5 py-px align-middle text-[10.5px] font-semibold tracking-wide text-accent-text">
 										PoC
 									</span>
-									<span className="font-medium">{item.poc_name}</span>
+									<span className="font-medium">
+										<Highlight text={item.poc_name!} terms={options.highlight} />
+									</span>
 									<span className="text-fg-3"> · </span>
 								</>
 							)}
-							{item.title}
+							<Highlight text={item.title} terms={options.highlight} />
 						</span>
 					</div>
+					{item.snippet && (
+						<div className="mt-0.5 line-clamp-2 text-[12px] leading-[18px] text-fg-2">
+							<Highlight text={item.snippet} terms={options.highlight} />
+						</div>
+					)}
 					<div className="mt-1 flex flex-wrap items-center gap-1.5 empty:hidden">
 						{item.parent_title && (
 							<span className="inline-flex min-w-0 items-center gap-1 text-[11.5px] text-fg-3">
 								<CornerDownRight className="size-3" />
-								<span className="truncate">{item.parent_title}</span>
+								<span className="truncate">
+									<Highlight text={item.parent_title} terms={options.highlight} />
+								</span>
 							</span>
 						)}
 						{options.showCategory && item.category === 'followup' && <Chip tone="neutral">Follow-up</Chip>}
@@ -118,6 +129,7 @@ export function TaskRow({ item, today, options = {} }: { item: Item; today: stri
 						<WhoChip
 							company={item.company}
 							contact={item.contact}
+							highlight={options.highlight}
 							onCompany={() =>
 								item.account_hubspot_url ? openExternal(item.account_hubspot_url) : item.company && go({ kind: 'account', name: item.company })
 							}

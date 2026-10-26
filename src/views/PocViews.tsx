@@ -14,11 +14,12 @@ import {
 	Trash2,
 	Trophy,
 } from 'lucide-react';
-import { motion } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { addDays, daysBetween, formatDay, parseDate, skipWeekend, toDateStr } from '../../shared/dates.js';
+import { daysBetween, formatDay } from '../../shared/dates.js';
 import { dealUrl } from '../../shared/hubspot.js';
+import { fold } from '../../shared/quickparse.js';
 import {
 	useActions,
 	useHubspotSearch,
@@ -29,7 +30,7 @@ import {
 	useSettings,
 	useToday,
 } from '../api/hooks';
-import type { Poc } from '../api/types';
+import type { Item, Poc } from '../api/types';
 import { Chip, DueChip, EmptyState, PocDot, ProgressBar } from '../components/bits';
 import { StatTile } from '../components/charts';
 import { Composer } from '../components/Composer';
@@ -519,66 +520,6 @@ export function NewPocDialog() {
 	);
 }
 
-/** Primer día laborable del próximo trimestre. */
-function nextQuarter(today: string) {
-	const d = parseDate(today);
-	const q = Math.floor(d.getMonth() / 3);
-	const start = new Date(d.getFullYear() + (q === 3 ? 1 : 0), ((q + 1) % 4) * 3, 1);
-	return { date: skipWeekend(toDateStr(start)), label: `Q${((q + 1) % 4) + 1}` };
-}
-
-function PauseForm({ poc, onDone }: { poc: Poc; onDone: () => void }) {
-	const today = useToday();
-	const a = useActions();
-	const q = nextQuarter(today);
-	const options = [
-		{ label: 'En 2 semanas', value: addDays(today, 14) },
-		{ label: 'En 1 mes', value: addDays(today, 30) },
-		{ label: `Inicio de ${q.label}`, value: q.date },
-	];
-	const [until, setUntil] = useState<string | null>(q.date);
-	const [body, setBody] = useState('');
-	return (
-		<div className="w-72">
-			<div className="mb-2 text-[13px] font-semibold">Pausar PoC</div>
-			<div className="mb-2 text-[11.5px] text-fg-2">Sus tareas desaparecen de Hoy y vuelven solas cuando acabe la pausa.</div>
-			<div className="flex flex-wrap gap-1">
-				{options.map((o) => (
-					<button
-						key={o.label}
-						type="button"
-						onClick={() => setUntil(o.value)}
-						className={cx('rounded-lg px-2 py-1 text-left text-[11.5px]', until === o.value ? 'bg-accent-soft text-accent-text' : 'text-fg-2 hover:bg-hover')}
-					>
-						<div className="font-medium">{o.label}</div>
-						<div className="text-[10.5px] opacity-75">{formatDay(o.value, today)}</div>
-					</button>
-				))}
-				<button
-					type="button"
-					onClick={() => setUntil(null)}
-					className={cx('rounded-lg px-2 py-1 text-[11.5px] font-medium', until === null ? 'bg-accent-soft text-accent-text' : 'text-fg-2 hover:bg-hover')}
-				>
-					Sin fecha
-				</button>
-			</div>
-			<input type="date" value={until ?? ''} onChange={(e) => setUntil(e.target.value || null)} className={cx(inputClass, 'mt-2')} />
-			<input value={body} onChange={(e) => setBody(e.target.value)} placeholder="Motivo (p. ej. no hacen PoC hasta Q1)" className={cx(inputClass, 'mt-2')} />
-			<div className="mt-3 flex justify-end">
-				<Button
-					variant="primary"
-					onClick={async () => {
-						await a.setPocStatus(poc.id, { status: 'paused', paused_until: until, body });
-						onDone();
-					}}
-				>
-					Pausar
-				</Button>
-			</div>
-		</div>
-	);
-}
-
 function HubspotCard({ poc, today }: { poc: Poc; today: string }) {
 	const a = useActions();
 	const { data: status } = useHubspotStatus();
@@ -716,25 +657,71 @@ function HubspotCard({ poc, today }: { poc: Poc; today: string }) {
 	);
 }
 
-/** En una PoC sin tareas, ofrece la checklist de plantilla (ya no se crea sola al dar de alta la PoC). */
-function TemplateButton({ pocId }: { pocId: number }) {
+/**
+ * «Tareas de PoC»: las de Ajustes salen como sugerencias bajo las tareas de la PoC. Un clic y pasan a ser
+ * una tarea más (arriba, con las escritas a mano); las que ya tiene la PoC, hechas o no, no se ofrecen.
+ */
+function PocTaskSuggestions({ pocId, tasks }: { pocId: number; tasks: Item[] }) {
 	const a = useActions();
+	const go = useUI((s) => s.go);
 	const { data: settings } = useSettings();
-	const lines = (settings?.poc_template ?? '').split('\n').map((l) => l.trim()).filter(Boolean);
+	const [adding, setAdding] = useState<string[]>([]);
+	const have = new Set(tasks.map((t) => fold(t.title).trim()));
+	const lines = [...new Set((settings?.poc_template ?? '').split('\n').map((l) => l.trim()).filter(Boolean))];
+	const pending = lines.filter((l) => !have.has(fold(l)) && !adding.includes(l));
 	if (!lines.length) return null;
+
+	const add = async (title: string) => {
+		setAdding((x) => [...x, title]);
+		try {
+			await a.create({ category: 'poc', poc_id: pocId, title });
+		} finally {
+			setAdding((x) => x.filter((t) => t !== title));
+		}
+	};
+
 	return (
-		<div className="mb-3 px-2.5">
-			<Button
-				size="sm"
-				variant="ghost"
-				icon={<ListChecks className="size-3.5" />}
-				onClick={async () => {
-					for (const title of lines) await a.create({ category: 'poc', poc_id: pocId, title });
-				}}
-			>
-				Usar la checklist de plantilla ({plural(lines.length, 'tarea', 'tareas')})
-			</Button>
-		</div>
+		<AnimatePresence initial={false}>
+			{pending.length > 0 && (
+				<motion.section
+					key="suggestions"
+					initial={{ opacity: 0, height: 0 }}
+					animate={{ opacity: 1, height: 'auto' }}
+					exit={{ opacity: 0, height: 0 }}
+					transition={{ duration: 0.2 }}
+					className="overflow-hidden"
+				>
+					<div className="mt-3 mb-1 flex items-center gap-2 px-2.5">
+						<span className="flex items-center gap-1.5 text-[12px] font-semibold text-fg-2">
+							<ListChecks className="size-3.5" />
+							Tareas de PoC
+						</span>
+						<span className="text-[11.5px] text-fg-3">Haz clic en una para añadirla</span>
+						<button type="button" onClick={() => go({ kind: 'settings' })} className="ml-auto rounded-md px-1.5 text-[11.5px] text-fg-3 hover:bg-hover hover:text-fg-2">
+							Editar en Ajustes
+						</button>
+					</div>
+					<AnimatePresence initial={false}>
+						{pending.map((title) => (
+							<motion.button
+								key={title}
+								type="button"
+								layout="position"
+								exit={{ opacity: 0, height: 0, transition: { duration: 0.18 } }}
+								onClick={() => add(title)}
+								className="group flex w-full items-center gap-2.5 overflow-hidden rounded-xl px-2.5 py-2 text-left text-fg-2 transition-colors hover:bg-hover hover:text-fg"
+							>
+								<span className="flex size-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] border-dashed border-fg-3/70 text-fg-3 transition-colors group-hover:border-solid group-hover:border-accent group-hover:bg-accent group-hover:text-accent-fg">
+									<Plus className="size-3" />
+								</span>
+								<span className="min-w-0 flex-1 text-[13.5px] leading-5">{title}</span>
+								<span className="text-[11.5px] font-medium text-accent-text opacity-0 transition-opacity group-hover:opacity-100">Añadir</span>
+							</motion.button>
+						))}
+					</AnimatePresence>
+				</motion.section>
+			)}
+		</AnimatePresence>
 	);
 }
 
@@ -744,7 +731,6 @@ export function PocView({ id }: { id: number }) {
 	const { data: list } = useItems('poc', { poc: id });
 	const a = useActions();
 	const go = useUI((s) => s.go);
-	const [pauseOpen, setPauseOpen] = useState(false);
 	const [confirmDelete, setConfirmDelete] = useState(false);
 	const [noteText, setNoteText] = useState('');
 	const poc = data?.poc;
@@ -800,9 +786,6 @@ export function PocView({ id }: { id: number }) {
 					<div className="no-drag flex items-center gap-2">
 						<StatusChip poc={poc} today={today} />
 						<OpenDays poc={poc} today={today} />
-						<Popover open={pauseOpen} onOpenChange={setPauseOpen} align="end" trigger={<span />}>
-							<PauseForm poc={poc} onDone={() => setPauseOpen(false)} />
-						</Popover>
 						<Menu
 							trigger={
 								<Button size="sm" icon={<Ellipsis className="size-3.5" />}>
@@ -815,9 +798,11 @@ export function PocView({ id }: { id: number }) {
 									Reactivar
 								</MenuItem>
 							)}
-							<MenuItem icon={<Pause />} onSelect={() => setTimeout(() => setPauseOpen(true), 0)}>
-								Pausar hasta…
-							</MenuItem>
+							{poc.status !== 'paused' && (
+								<MenuItem icon={<Pause />} onSelect={() => a.setPocStatus(poc.id, { status: 'paused' })}>
+									Pausar
+								</MenuItem>
+							)}
 							<MenuItem
 								icon={<Trophy />}
 								onSelect={async () => {
@@ -880,10 +865,11 @@ export function PocView({ id }: { id: number }) {
 					<div className="mb-4 flex items-center gap-3 rounded-xl bg-warn-soft px-3.5 py-2.5 text-[12.5px]">
 						<Pause className="size-4 text-warn" />
 						<span className="flex-1">
-							{poc.paused_until ? `En pausa hasta el ${formatDay(poc.paused_until, today)}.` : 'En pausa.'} Sus tareas no aparecen en Hoy hasta entonces.
+							{poc.paused_until ? `En pausa hasta el ${formatDay(poc.paused_until, today)}.` : 'En pausa.'} Sus tareas no salen en Inicio ni en
+							Próximos hasta que la reactives; los días abierta siguen contando.
 						</span>
-						<Button size="xs" onClick={() => a.setPocStatus(poc.id, { status: 'active' })}>
-							Reactivar ya
+						<Button size="xs" icon={<Play className="size-3" />} onClick={() => a.setPocStatus(poc.id, { status: 'active' })}>
+							Reactivar
 						</Button>
 					</div>
 				)}
@@ -899,8 +885,8 @@ export function PocView({ id }: { id: number }) {
 				</div>
 
 				<Composer lockCategory defaults={{ category: 'poc', poc_id: poc.id }} placeholder="Añadir tarea a la PoC… (prueba «Kickoff con Brigitte el jueves»)" />
-				{list && !items.length && !list.done.length && <TemplateButton pocId={poc.id} />}
 				<TaskList items={items} today={today} options={{ sortable: true, listKey: `poc-${poc.id}`, queryKey: ['items', 'poc', { poc: poc.id }] }} />
+				{list && (poc.status === 'active' || poc.status === 'paused') && <PocTaskSuggestions pocId={poc.id} tasks={[...items, ...list.done]} />}
 				<DoneSection items={list?.done ?? []} today={today} title="Hechas" defaultOpen />
 
 				<PocPeople poc={poc} people={data.contacts} kind="main" />

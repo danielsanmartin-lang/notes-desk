@@ -17,6 +17,7 @@ import {
 import { companyUrl, parseHubspotCompanyRef, parseHubspotRef } from '../shared/hubspot.js';
 import { isCountry } from '../shared/countries.js';
 import { regionOf, sumByCurrency } from '../shared/pocs.js';
+import { searchTerms, snippetAround } from '../shared/search.js';
 
 export class HttpError extends Error {
 	constructor(status, message) {
@@ -38,13 +39,8 @@ export const DEFAULT_SETTINGS = {
 	digest_time: '09:00',
 	shortcut: 'Alt+Space',
 	open_at_login: false,
-	poc_template: [
-		'Kickoff con el cliente',
-		'Configurar el entorno de la PoC',
-		'Lanzar la PoC',
-		'Revisar resultados con el cliente',
-		'Enviar propuesta',
-	].join('\n'),
+	// «Tareas de PoC»: sugerencias que salen en cada PoC y se añaden con un clic.
+	poc_template: ['Mandar instrucciones de whitelisting y guía', 'Revisar si han creado usuarios y campañas', 'Mandar follow-up PoC'].join('\n'),
 	digest_last: '',
 	hubspot_portal_id: '',
 };
@@ -866,6 +862,50 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 		return { items, pocs, accounts };
 	}
 
+	/**
+	 * Buscador del Inicio: tareas, follow-ups y subtareas (abiertas y hechas, no las de la papelera) que
+	 * contienen todas las palabras en el título, las notas, la empresa, el contacto, la PoC, la tarea madre
+	 * o el historial. Si alguna palabra no está en el título, devuelve el trozo de nota donde aparece.
+	 */
+	function searchItems(text) {
+		const terms = searchTerms(text);
+		if (!terms.length) return { items: [], done: [] };
+		const fields = ['i.title', 'i.notes', 'i.company', 'i.contact', 'p.name', 'p.company', 'par.title', 'act.bodies'];
+		const rows = all(
+			`SELECT i.id, i.title, i.notes, act.list,
+			        fold(${fields.map((f) => `coalesce(${f}, '')`).join(` || ' ' || `)}) AS hay
+			 FROM items i
+			 LEFT JOIN pocs p ON p.id = i.poc_id
+			 LEFT JOIN items par ON par.id = i.parent_id
+			 LEFT JOIN (SELECT item_id, group_concat(body, ' ') AS bodies, json_group_array(body) AS list
+			            FROM activity WHERE body IS NOT NULL AND body <> '' GROUP BY item_id) act ON act.item_id = i.id
+			 WHERE i.deleted_at IS NULL AND (par.id IS NULL OR par.deleted_at IS NULL)`,
+		).filter((r) => terms.every((t) => r.hay.includes(t)));
+		const snippets = new Map();
+		for (const r of rows) {
+			const title = fold(r.title);
+			const missing = terms.filter((t) => !title.includes(t));
+			if (!missing.length) continue;
+			const texts = [r.notes, ...(r.list ? JSON.parse(r.list) : [])].filter(Boolean);
+			for (const t of missing) {
+				const found = texts.map((x) => snippetAround(x, t)).find(Boolean);
+				if (found) {
+					snippets.set(r.id, found);
+					break;
+				}
+			}
+		}
+		const p = { ids: JSON.stringify(rows.map((r) => r.id)) };
+		const q = (where, order) =>
+			all(`${ITEM_SELECT} WHERE i.id IN (SELECT value FROM json_each(@ids)) AND ${where} ORDER BY ${order} LIMIT 100`, p).map(
+				(row) => ({ ...itemOut(row), snippet: snippets.get(row.id) ?? null }),
+			);
+		return {
+			items: q(OPEN, '(i.due_date IS NULL), i.due_date, i.updated_at DESC, i.id DESC'),
+			done: q(`i.state = 'done'`, 'i.completed_at DESC, i.id DESC'),
+		};
+	}
+
 	function suggestions() {
 		const companies = all(
 			`SELECT company AS value, COUNT(*) AS n FROM (
@@ -1310,6 +1350,7 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 		listWeeks,
 		getWeek,
 		search,
+		searchItems,
 		suggestions,
 		housekeeping,
 		dueReminders,

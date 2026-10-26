@@ -1,18 +1,77 @@
-import { AlarmClock, CalendarDays, CircleDashed, Coffee, Hand, Hourglass, Inbox, PartyPopper, RotateCcw, Send, SquareCheckBig, Star, Sun, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { AlarmClock, CalendarDays, CircleDashed, Coffee, Hand, Hourglass, Inbox, ListTodo, PartyPopper, RotateCcw, Search, Send, SquareCheckBig, Star, Sun, Trash2, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { addDays, daysBetween } from '../../shared/dates.js';
-import { useActions, useItems, useToday } from '../api/hooks';
+import { searchTerms } from '../../shared/search.js';
+import { useActions, useItems, useSearchItems, useToday } from '../api/hooks';
 import type { Item } from '../api/types';
 import { Chip, EmptyState } from '../components/bits';
 import { Composer } from '../components/Composer';
 import { DoneSection, Group, TaskList } from '../components/TaskList';
-import { Button, Confirm } from '../components/ui';
+import { Button, Confirm, Kbd } from '../components/ui';
 import { capFirst, cx, longDate, plural } from '../lib/format';
 import { useUI } from '../lib/store';
 import { useListIds, ViewBody, ViewHeader } from './common';
 
+/** Buscador del Inicio. ⌘F lo enfoca; Esc lo vacía y, con otro Esc, sale de él. */
+function SearchField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+	const ref = useRef<HTMLInputElement>(null);
+	useEffect(() => {
+		const onKey = (e: KeyboardEvent) => {
+			if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') {
+				e.preventDefault();
+				ref.current?.focus();
+				ref.current?.select();
+			}
+		};
+		window.addEventListener('keydown', onKey);
+		return () => window.removeEventListener('keydown', onKey);
+	}, []);
+	return (
+		<label className="flex h-8 w-60 items-center gap-2 rounded-lg bg-hover px-2.5 text-fg-3 ring-accent/40 transition-[width] duration-200 focus-within:w-80 focus-within:bg-raised focus-within:ring-2">
+			<Search className="size-3.5 shrink-0" />
+			<input
+				ref={ref}
+				value={value}
+				onChange={(e) => onChange(e.target.value)}
+				onKeyDown={(e) => {
+					if (e.key !== 'Escape' || !value) return;
+					e.stopPropagation();
+					onChange('');
+				}}
+				placeholder="Buscar en tus notas…"
+				aria-label="Buscar en tus notas"
+				className="min-w-0 flex-1 bg-transparent text-[13px] text-fg outline-none placeholder:text-fg-3"
+			/>
+			{value ? (
+				<button type="button" onClick={() => onChange('')} aria-label="Borrar la búsqueda" className="flex size-5 items-center justify-center rounded hover:bg-active hover:text-fg">
+					<X className="size-3.5" />
+				</button>
+			) : (
+				<Kbd>⌘F</Kbd>
+			)}
+		</label>
+	);
+}
+
+/** Espera a que dejes de teclear un momento antes de buscar. */
+function useDebounced<T>(value: T, ms = 160) {
+	const [v, setV] = useState(value);
+	useEffect(() => {
+		const t = setTimeout(() => setV(value), ms);
+		return () => clearTimeout(t);
+	}, [value, ms]);
+	return v;
+}
+
 export function TodayView() {
 	const today = useToday();
+	const [query, setQuery] = useState('');
+	const q = useDebounced(query.trim());
+	const searching = query.trim().length > 0;
+	const terms = searchTerms(q);
+	const { data: found, isPlaceholderData } = useSearchItems(q);
+	// Mientras tecleas o llega la respuesta se dejan los resultados anteriores, sin parpadeos.
+	const stale = !found || isPlaceholderData || q !== query.trim();
 	const { data, isLoading } = useItems('today');
 	const items = data?.items ?? [];
 	const chase = items.filter((i) => i.state === 'waiting' && i.due_date && i.due_date <= today);
@@ -20,8 +79,12 @@ export function TodayView() {
 	const now = items.filter((i) => !chase.includes(i) && i.due_date === today);
 	const flagged = items.filter((i) => !chase.includes(i) && !overdue.includes(i) && !now.includes(i));
 	const undated = data?.undated ?? [];
-	useListIds([...chase, ...overdue, ...now, ...flagged, ...undated].map((i) => i.id));
+	const results = q ? (found?.items ?? []) : [];
+	const resultsDone = q ? (found?.done ?? []) : [];
+	useListIds((searching ? [...results, ...resultsDone] : [...chase, ...overdue, ...now, ...flagged, ...undated]).map((i) => i.id));
 	const opts = { showPoc: true, showCategory: true, sortable: false, listKey: 'today', nested: false };
+	const searchOpts = { ...opts, listKey: 'search', highlight: terms };
+	const total = results.length + resultsDone.length;
 
 	return (
 		<>
@@ -30,47 +93,69 @@ export function TodayView() {
 				iconClass="bg-warn-soft text-warn"
 				title="Inicio"
 				subtitle={capFirst(longDate(today))}
+				right={<SearchField value={query} onChange={setQuery} />}
 			/>
 			<ViewBody>
-				<Composer defaults={{ category: 'task' }} placeholder="Nueva tarea o follow-up… (elige tipo y fecha al escribir)" />
-				{!isLoading && !items.length && !undated.length && (
-					<EmptyState icon={(data?.done.length ?? 0) > 0 ? <PartyPopper /> : <Coffee />} title={(data?.done.length ?? 0) > 0 ? 'Todo hecho por hoy' : 'Nada pendiente para hoy'}>
-						{(data?.done.length ?? 0) > 0
-							? `Has completado ${plural(data!.done.length, 'tarea', 'tareas')} hoy.`
-							: 'Aquí aparece lo que vence hoy, los follow-ups que toca perseguir, lo destacado y lo que no tiene fecha.'}
-					</EmptyState>
+				{searching ? (
+					<>
+						<div className="mb-3 px-2.5 text-[12.5px] text-fg-2">
+							{stale ? 'Buscando…' : total > 0 && `${plural(total, 'resultado', 'resultados')} para «${q}»`}
+						</div>
+						{!stale && total === 0 && (
+							<EmptyState icon={<Search />} title={`Nada coincide con «${q}»`}>
+								Se busca en el título, las notas, la empresa, el contacto, la PoC y lo apuntado en el historial de cada tarea.
+							</EmptyState>
+						)}
+						{results.length > 0 && (
+							<Group title="Pendientes" icon={<ListTodo />} count={results.length}>
+								<TaskList items={results} today={today} options={searchOpts} />
+							</Group>
+						)}
+						<DoneSection key={q} items={resultsDone} today={today} title="Completadas" options={searchOpts} defaultOpen={!results.length} />
+					</>
+				) : (
+					<>
+						<Composer defaults={{ category: 'task' }} placeholder="Nueva tarea o follow-up… (elige tipo y fecha al escribir)" />
+						{!isLoading && !items.length && !undated.length && (
+							<EmptyState icon={(data?.done.length ?? 0) > 0 ? <PartyPopper /> : <Coffee />} title={(data?.done.length ?? 0) > 0 ? 'Todo hecho por hoy' : 'Nada pendiente para hoy'}>
+								{(data?.done.length ?? 0) > 0
+									? `Has completado ${plural(data!.done.length, 'tarea', 'tareas')} hoy.`
+									: 'Aquí aparece lo que vence hoy, los follow-ups que toca perseguir, lo destacado y lo que no tiene fecha.'}
+							</EmptyState>
+						)}
+						{chase.length > 0 && (
+							<Group title="Toca volver a perseguir" icon={<AlarmClock />} count={chase.length} tone="warn">
+								<TaskList items={chase} today={today} options={opts} />
+							</Group>
+						)}
+						{overdue.length > 0 && (
+							<Group title="Atrasadas" icon={<Hourglass />} count={overdue.length}>
+								<TaskList items={overdue} today={today} options={opts} />
+							</Group>
+						)}
+						{now.length > 0 && (
+							<Group title="Para hoy" icon={<Sun />} count={now.length} tone="accent">
+								<TaskList items={now} today={today} options={opts} />
+							</Group>
+						)}
+						{flagged.length > 0 && (
+							<Group title="Destacadas" icon={<Star />} count={flagged.length}>
+								<TaskList items={flagged} today={today} options={opts} />
+							</Group>
+						)}
+						{undated.length > 0 && (
+							<Group
+								title="Sin fecha"
+								icon={<CircleDashed />}
+								count={undated.length}
+								right={<span className="text-[11px] text-fg-3">Ponles fecha para que salgan cuando toquen</span>}
+							>
+								<TaskList items={undated} today={today} options={opts} />
+							</Group>
+						)}
+						<DoneSection items={data?.done ?? []} today={today} title="Completadas hoy" options={opts} />
+					</>
 				)}
-				{chase.length > 0 && (
-					<Group title="Toca volver a perseguir" icon={<AlarmClock />} count={chase.length} tone="warn">
-						<TaskList items={chase} today={today} options={opts} />
-					</Group>
-				)}
-				{overdue.length > 0 && (
-					<Group title="Atrasadas" icon={<Hourglass />} count={overdue.length}>
-						<TaskList items={overdue} today={today} options={opts} />
-					</Group>
-				)}
-				{now.length > 0 && (
-					<Group title="Para hoy" icon={<Sun />} count={now.length} tone="accent">
-						<TaskList items={now} today={today} options={opts} />
-					</Group>
-				)}
-				{flagged.length > 0 && (
-					<Group title="Destacadas" icon={<Star />} count={flagged.length}>
-						<TaskList items={flagged} today={today} options={opts} />
-					</Group>
-				)}
-				{undated.length > 0 && (
-					<Group
-						title="Sin fecha"
-						icon={<CircleDashed />}
-						count={undated.length}
-						right={<span className="text-[11px] text-fg-3">Ponles fecha para que salgan cuando toquen</span>}
-					>
-						<TaskList items={undated} today={today} options={opts} />
-					</Group>
-				)}
-				<DoneSection items={data?.done ?? []} today={today} title="Completadas hoy" options={opts} />
 			</ViewBody>
 		</>
 	);

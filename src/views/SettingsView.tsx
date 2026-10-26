@@ -99,7 +99,7 @@ export function SettingsView() {
 					</label>
 				</Card>
 
-				<Card icon={<FlaskConical />} title="Plantilla de PoC" description="Una tarea por línea. No se crea sola: aparece un botón para usarla en las PoCs que no tienen tareas.">
+				<Card icon={<FlaskConical />} title="Tareas de PoC" description="Una por línea. Salen como sugerencias en cada PoC: haces clic en una y pasa a ser una tarea de esa PoC.">
 					<AutoTextarea {...template} className="min-h-[90px] rounded-xl bg-hover px-3 py-2.5 text-[13px] leading-6" />
 				</Card>
 

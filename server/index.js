@@ -109,6 +109,7 @@ export function startServer({ repo, port = 0, token = null, staticDir = null, me
 	r.get('/weeks', (req, res) => res.json(repo.listWeeks()));
 	r.get('/weeks/:week', (req, res) => res.json(repo.getWeek(req.params.week)));
 	r.get('/search', (req, res) => res.json(repo.search(String(req.query.q ?? ''))));
+	r.get('/search/items', (req, res) => res.json(repo.searchItems(String(req.query.q ?? ''))));
 	r.get('/suggestions', (req, res) => res.json(repo.suggestions()));
 	r.get('/settings', (req, res) => res.json(repo.getSettings()));
 	r.patch('/settings', (req, res) => res.json(repo.setSettings(req.body)));

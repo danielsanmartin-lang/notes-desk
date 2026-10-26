@@ -33,6 +33,8 @@ export interface Item {
 	parent_title: string | null;
 	/** Enlace a la empresa en HubSpot de la cuenta de la tarea (su empresa o la de su PoC). */
 	account_hubspot_url: string | null;
+	/** Solo en el buscador: trozo de nota o del historial donde aparece lo buscado. */
+	snippet?: string | null;
 	sub_total: number;
 	sub_done: number;
 	/** En las listas: sus subtareas, para enseñarlas debajo con su contador. */

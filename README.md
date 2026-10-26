@@ -12,6 +12,9 @@ SQLite local.
   en un grupo aparte, todo lo que no tiene fecha y te toca a ti (también las tareas de las PoCs
   activas, con el nombre de su PoC). El número de la barra lateral, del Dock y de la barra de menús
   cuenta solo lo que vence, no lo que no tiene fecha.
+  Arriba tiene un **buscador** (⌘F): escribe una o varias palabras y salen las tareas y follow-ups
+  (pendientes y hechos) que las contienen en el título, las notas, la empresa, el contacto, la PoC o el
+  historial, con las palabras resaltadas.
 - **Próximos 7 días**: lo programado, agrupado por día.
 - **Follow-ups**: dos grupos, *Me toca* y *Esperando respuesta*, con los días que llevas esperando
   (verde, ámbar, rojo).
@@ -26,8 +29,9 @@ SQLite local.
   movimiento, nombre) y vista en **tarjetas o lista**. El importe es el del deal de HubSpot o, si no
   hay deal, uno a mano en la ficha. Las ganadas y perdidas pasan a **PoCs concluidas**, con su resumen.
 - Cada PoC: una tarjeta (importe, progreso, siguiente tarea, etapa de HubSpot). Dentro, su
-  checklist, notas, historial, el enlace al deal y **Pausar hasta…** (sus tareas desaparecen de Hoy y
-  vuelven solas cuando termina la pausa). Al crearla se puede partir de una plantilla de checklist.
+  checklist, notas, historial, el enlace al deal y **Pausar** (sus tareas desaparecen de Inicio y de
+  Próximos hasta que la reactives; los días abierta siguen contando). Bajo sus tareas salen las
+  **Tareas de PoC** de Ajustes como sugerencias: un clic y pasan a ser una tarea más de esa PoC.
 - **Cuentas**: salen solas de la empresa de cada tarea y de cada PoC (sin distinguir mayúsculas ni
   acentos). Cada cuenta puede enlazarse con su empresa de HubSpot (botón «Enlazar con HubSpot»
   en su página); entonces, en cualquier tarea, pulsar el nombre de la empresa abre esa ficha de HubSpot. Cada cuenta reúne lo que te toca, lo que espera respuesta, sus PoCs, los contactos
@@ -67,7 +71,7 @@ espacios). En la captura rápida, Tab cambia el tipo, ↩ guarda y ⌘↩ guarda
 
 ### Atajos
 
-⌘K buscar y acciones · ⌘N nueva tarea · ⌘1–9 secciones · ⌘, ajustes · ↑ ↓ moverse por la lista ·
+⌘K buscar y acciones · ⌘F buscador del Inicio · ⌘N nueva tarea · ⌘1–9 secciones · ⌘, ajustes · ↑ ↓ moverse por la lista ·
 Espacio completar · ⌘T registrar toque · ⌘⌫ a la papelera · Esc cerrar el panel. Arrastrar una tarea a
 una PoC o categoría de la barra lateral la mueve allí.
 
