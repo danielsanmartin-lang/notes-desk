@@ -75,7 +75,7 @@ export function filterPocs(pocs: Poc[], f: PocFilterState) {
 			(f.status === 'all' || p.status === f.status) &&
 			(!f.country || p.country === f.country) &&
 			(!f.owner || (p.owner ?? '') === f.owner) &&
-			(!q || fold(`${p.name} ${p.company ?? ''} ${p.owner ?? ''}`).includes(q)),
+			(!q || fold(`${p.name} ${p.company ?? ''} ${p.partner ?? ''} ${p.owner ?? ''}`).includes(q)),
 	);
 }
 

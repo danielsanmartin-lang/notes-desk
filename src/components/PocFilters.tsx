@@ -52,7 +52,7 @@ export function PocFilters({
 				<input
 					value={filters.q}
 					onChange={(e) => set({ q: e.target.value })}
-					placeholder="Buscar PoC o empresa"
+					placeholder="Buscar PoC, empresa o partner"
 					className={cx(inputClass, 'w-56 pl-8')}
 				/>
 			</div>

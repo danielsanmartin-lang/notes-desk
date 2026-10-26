@@ -219,7 +219,11 @@ export function AccountView({ name }: { name: string }) {
 								<div className="min-w-0 flex-1">
 									<div className="flex items-center gap-2 text-[13px] font-medium">
 										<span className="truncate">{c.name}</span>
-										{c.poc && <Chip tone="neutral">Admin en {c.poc}</Chip>}
+										{c.poc && (
+											<Chip tone="neutral">
+												{c.kind === 'main' ? `Contacto principal · ${c.poc}` : c.kind === 'partner' ? `Partner ${c.partner ?? ''} · ${c.poc}` : `Admin en ${c.poc}`}
+											</Chip>
+										)}
 									</div>
 									<div className="truncate text-[11.5px] text-fg-3">
 										{[c.role, c.email, c.tasks ? plural(c.tasks, 'tarea', 'tareas') : null].filter(Boolean).join(' · ') || '—'}

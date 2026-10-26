@@ -568,10 +568,11 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 		  (SELECT COUNT(*) FROM items i WHERE i.poc_id = p.id AND i.deleted_at IS NULL AND i.state = 'waiting') AS waiting,
 		  (SELECT max(a.occurred_at) FROM activity a LEFT JOIN items i ON i.id = a.item_id
 		    WHERE a.poc_id = p.id OR i.poc_id = p.id) AS last_activity_at,
-		  (SELECT COUNT(*) FROM poc_admins pa WHERE pa.poc_id = p.id) AS admin_count
+		  (SELECT COUNT(*) FROM poc_admins pa WHERE pa.poc_id = p.id AND pa.kind = 'admin') AS admin_count
 		FROM pocs p`;
 
-	const pocAdmins = (pocId) => all('SELECT * FROM poc_admins WHERE poc_id = @poc ORDER BY sort_order, id', { poc: pocId });
+	// Personas de la PoC: contacto principal, admins del cliente y contacto del partner (columna kind).
+	const pocContacts = (pocId) => all('SELECT * FROM poc_admins WHERE poc_id = @poc ORDER BY sort_order, id', { poc: pocId });
 
 	const nextTask = (pocId) =>
 		itemOut(
@@ -597,7 +598,7 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 			 ORDER BY a.occurred_at DESC, a.id DESC LIMIT 300`,
 			{ id },
 		).map(activityOut);
-		return { poc: { ...poc, next: nextTask(id) }, admins: pocAdmins(id), activity };
+		return { poc: { ...poc, next: nextTask(id) }, contacts: pocContacts(id), activity };
 	}
 
 	function normalizePoc(data) {
@@ -608,6 +609,7 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 			out.name = n.slice(0, 200);
 		}
 		for (const k of ['company', 'notes']) if (k in data) out[k] = emptyToNull(data[k]);
+		if ('partner' in data) out.partner = emptyToNull(data.partner)?.slice(0, 120) ?? null;
 		if ('owner' in data) out.owner = emptyToNull(data.owner)?.slice(0, 120) ?? null;
 		if ('amount' in data) {
 			const n = parseAmount(data.amount);
@@ -693,14 +695,20 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 		return getPoc(id).poc;
 	}
 
-	// ── Admins del cliente en la PoC (los que usarán la plataforma) ──
+	// ── Personas de la PoC: contacto principal, admins del cliente y contacto del partner ──
+
+	const CONTACT_KINDS = ['admin', 'main', 'partner'];
 
 	function normalizeAdmin(data) {
 		const out = {};
 		if ('name' in data) {
 			const n = String(data.name ?? '').trim();
-			if (!n) throw bad('El admin necesita un nombre');
+			if (!n) throw bad('El contacto necesita un nombre');
 			out.name = n.slice(0, 200);
+		}
+		if ('kind' in data) {
+			if (!CONTACT_KINDS.includes(data.kind)) throw bad('Tipo de contacto no válido');
+			out.kind = data.kind;
 		}
 		if ('email' in data) {
 			const e = emptyToNull(data.email);
@@ -714,10 +722,11 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 	function addPocAdmin(pocId, data) {
 		requirePoc(pocId);
 		const d = normalizeAdmin(data ?? {});
-		if (!d.name) throw bad('El admin necesita un nombre');
+		if (!d.name) throw bad('El contacto necesita un nombre');
 		const row = {
 			email: null,
 			role: null,
+			kind: 'admin',
 			...d,
 			poc_id: pocId,
 			sort_order: get('SELECT coalesce(max(sort_order), 0) + 1 AS s FROM poc_admins WHERE poc_id = @poc', { poc: pocId }).s,
@@ -835,7 +844,7 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 			),
 		);
 		const pocs = listPocs().filter((p) => {
-			const hay = fold(`${p.name} ${p.company ?? ''} ${p.owner ?? ''} ${admins.get(p.id) ?? ''}`);
+			const hay = fold(`${p.name} ${p.company ?? ''} ${p.partner ?? ''} ${p.owner ?? ''} ${admins.get(p.id) ?? ''}`);
 			return tokens.every((t) => hay.includes(t));
 		});
 		const accounts = [...accountNames().values()].filter((n) => tokens.every((t) => fold(n).includes(t))).slice(0, 8);
@@ -857,7 +866,10 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 		const owners = all(
 			`SELECT owner AS value, COUNT(*) AS n FROM pocs WHERE owner IS NOT NULL GROUP BY lower(owner) ORDER BY n DESC, value`,
 		).map((r) => r.value);
-		return { companies, contacts, owners };
+		const partners = all(
+			`SELECT partner AS value, COUNT(*) AS n FROM pocs WHERE partner IS NOT NULL GROUP BY lower(partner) ORDER BY n DESC, value`,
+		).map((r) => r.value);
+		return { companies, contacts, owners, partners };
 	}
 
 	// ── Cuentas ────────────────────────────────────────────────────────────────
@@ -972,13 +984,13 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 			 WHERE i.deleted_at IS NULL AND i.contact IS NOT NULL AND ${cond} GROUP BY fold(i.contact) ORDER BY n DESC`,
 			p,
 		)) {
-			contacts.set(fold(r.name), { name: r.name, email: null, role: null, poc: null, tasks: r.n });
+			contacts.set(fold(r.name), { name: r.name, email: null, role: null, poc: null, kind: null, partner: null, tasks: r.n });
 		}
 		for (const poc of pocs) {
-			for (const a of pocAdmins(poc.id)) {
+			for (const a of pocContacts(poc.id)) {
 				const k = fold(a.name);
 				const prev = contacts.get(k);
-				contacts.set(k, { name: a.name, email: a.email, role: a.role, poc: poc.name, tasks: prev?.tasks ?? 0 });
+				contacts.set(k, { name: a.name, email: a.email, role: a.role, poc: poc.name, kind: a.kind, partner: poc.partner, tasks: prev?.tasks ?? 0 });
 			}
 		}
 		const scope = `(fold(coalesce(nullif(i.company, ''), pi.company)) = @key OR fold(pa.company) = @key)`;

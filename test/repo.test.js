@@ -203,10 +203,10 @@ test('ficha de la PoC: owner, fecha de inicio y admins del cliente', () => {
 
 	const detail = repo.getPoc(poc.id);
 	assert.equal(detail.poc.admin_count, 2);
-	assert.deepEqual(detail.admins.map((a) => a.name), ['Alida Brigitte Albarracín', 'Carlos Ruiz']);
+	assert.deepEqual(detail.contacts.map((a) => a.name), ['Alida Brigitte Albarracín', 'Carlos Ruiz']);
 	assert.equal(repo.updatePocAdmin(brigitte.id, { role: 'Responsable de seguridad' }).role, 'Responsable de seguridad');
 	repo.deletePocAdmin(brigitte.id);
-	assert.equal(repo.getPoc(poc.id).admins.length, 1);
+	assert.equal(repo.getPoc(poc.id).contacts.length, 1);
 
 	assert.equal(repo.search('carlos').pocs.length, 1, 'se encuentra la PoC por sus admins');
 	assert.equal(repo.search('daniel').pocs.length, 1, 'y por su owner');
@@ -332,4 +332,21 @@ test('el país tiene que existir', () => {
 	assert.equal(repo.createPoc({ name: 'HSBC', country: 'mx' }).country, 'MX');
 	assert.throws(() => repo.createPoc({ name: 'Nada', country: 'XX' }), /No conozco el país/);
 	assert.throws(() => repo.createPoc({ name: 'Nada', country: 'Mexico' }), /No conozco el país/);
+});
+
+test('partner y tipos de contacto de la PoC', () => {
+	const poc = repo.createPoc({ name: 'Global Bank', company: 'Global Bank', partner: 'Sofistic' });
+	assert.equal(poc.partner, 'Sofistic');
+	repo.addPocAdmin(poc.id, { name: 'Lisbeth', kind: 'main', role: 'CISO' });
+	repo.addPocAdmin(poc.id, { name: 'Angel', kind: 'partner' });
+	repo.addPocAdmin(poc.id, { name: 'Ana', email: 'ana@gb.com' });
+	assert.throws(() => repo.addPocAdmin(poc.id, { name: 'X', kind: 'jefe' }), /Tipo/);
+
+	const { poc: p, contacts } = repo.getPoc(poc.id);
+	assert.deepEqual(contacts.map((c) => [c.name, c.kind]), [['Lisbeth', 'main'], ['Angel', 'partner'], ['Ana', 'admin']]);
+	assert.equal(p.admin_count, 1, 'solo cuenta los admins');
+	assert.equal(repo.search('sofistic').pocs.length, 1);
+	assert.deepEqual(repo.suggestions().partners, ['Sofistic']);
+	const account = repo.getAccount('global bank');
+	assert.equal(account.contacts.find((c) => c.name === 'Angel').kind, 'partner');
 });

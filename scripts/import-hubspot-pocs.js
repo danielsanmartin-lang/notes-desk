@@ -41,6 +41,9 @@ function pocName(dealname) {
 	return kept.join(' - ') || dealname;
 }
 
+/** "Global Bank (Sofistic) - Panamá - 2026" → "Sofistic": el partner va entre paréntesis en el nombre del deal. */
+const partnerOf = (dealname) => dealname.split(' - ')[0].match(/\(([^)]+)\)/)?.[1]?.trim() ?? null;
+
 if (data.portalId) repo.setSettings({ hubspot_portal_id: String(data.portalId) });
 const existing = repo.listPocs();
 let created = 0;
@@ -52,6 +55,7 @@ for (const deal of data.deals) {
 		company: deal.company?.name ?? null,
 		country: COUNTRIES[(deal.company?.country ?? '').toLowerCase()] ?? null,
 		owner: data.owner ?? null,
+		partner: partnerOf(deal.dealname),
 		start_date: localDate(deal.entered_poc),
 	};
 	let poc = existing.find((p) => p.hubspot_deal_id === String(deal.id));

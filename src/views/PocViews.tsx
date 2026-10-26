@@ -34,7 +34,7 @@ import { StatTile } from '../components/charts';
 import { Composer } from '../components/Composer';
 import { CountryPicker } from '../components/CountryPicker';
 import { PocFilters, type PocViewMode } from '../components/PocFilters';
-import { Avatar, OpenDays, PocAdmins, PocFacts } from '../components/PocDetails';
+import { Avatar, OpenDays, PocFacts, PocPeople } from '../components/PocDetails';
 import { DoneSection, TaskList } from '../components/TaskList';
 import { Timeline } from '../components/Timeline';
 import {
@@ -118,7 +118,10 @@ export function PocCard({ poc, today }: { poc: Poc; today: string }) {
 					<div className="truncate font-display text-[15px] font-semibold">
 						{poc.name} {flagEmoji(poc.country)}
 					</div>
-					<div className="truncate text-[12px] text-fg-3">{poc.company ?? 'Sin empresa'}</div>
+					<div className="truncate text-[12px] text-fg-3">
+						{poc.company ?? 'Sin empresa'}
+						{poc.partner && <span> · vía {poc.partner}</span>}
+					</div>
 				</div>
 				{poc.owner && (
 					<span title={`Owner: ${poc.owner}`}>
@@ -227,7 +230,10 @@ function PocTable({ pocs, today, sort, onSort }: { pocs: Poc[]; today: string; s
 								<span className="block truncate font-medium">
 									{p.name} <span className="font-normal">{flagEmoji(p.country)}</span>
 								</span>
-								<span className="block truncate text-[11.5px] text-fg-3">{p.company ?? '—'}</span>
+								<span className="block truncate text-[11.5px] text-fg-3">
+									{p.company ?? '—'}
+									{p.partner && ` · vía ${p.partner}`}
+								</span>
 							</span>
 						</span>
 						<span className="min-w-0">
@@ -403,7 +409,7 @@ export function NewPocDialog() {
 	const { newPocOpen, setNewPocOpen, go } = useUI();
 	const a = useActions();
 	const { data: settings } = useSettings();
-	const empty = { name: '', company: '', country: '', owner: '', start_date: '', hubspot: '', amount: '', currency: 'EUR', use_template: true };
+	const empty = { name: '', company: '', country: '', partner: '', owner: '', start_date: '', hubspot: '', amount: '', currency: 'EUR', use_template: true };
 	const [form, setForm] = useState(empty);
 	// La divisa sigue al país (EUR en Iberia, USD en LATAM) hasta que la cambias a mano.
 	const [currencyTouched, setCurrencyTouched] = useState(false);
@@ -492,10 +498,16 @@ export function NewPocDialog() {
 						<input type="date" value={form.start_date} onChange={set('start_date')} className={inputClass} />
 					</label>
 				</div>
-				<label className="block">
-					<span className="mb-1 block text-[12px] font-medium text-fg-2">Deal de HubSpot (opcional)</span>
-					<input value={form.hubspot} onChange={set('hubspot')} placeholder="Pega el enlace del deal o su ID" className={inputClass} />
-				</label>
+				<div className="grid grid-cols-[190px_1fr] gap-2">
+					<label className="block">
+						<span className="mb-1 block text-[12px] font-medium text-fg-2">Partner (opcional)</span>
+						<input value={form.partner} onChange={set('partner')} list="zd-partners" placeholder="Sofistic, TRC…" className={inputClass} />
+					</label>
+					<label className="block">
+						<span className="mb-1 block text-[12px] font-medium text-fg-2">Deal de HubSpot (opcional)</span>
+						<input value={form.hubspot} onChange={set('hubspot')} placeholder="Pega el enlace del deal o su ID" className={inputClass} />
+					</label>
+				</div>
 				{templateCount > 0 && (
 					<label className="flex items-center gap-2 text-[12.5px] text-fg-2">
 						<input
@@ -867,7 +879,7 @@ export function PocView({ id }: { id: number }) {
 					</div>
 				)}
 
-				<PocFacts poc={poc} adminCount={data.admins.length} today={today} />
+				<PocFacts poc={poc} today={today} />
 				<HubspotCard poc={poc} today={today} />
 
 				<div className="mt-5 mb-2 flex items-center gap-3">
@@ -881,7 +893,9 @@ export function PocView({ id }: { id: number }) {
 				<TaskList items={items} today={today} options={{ sortable: true, listKey: `poc-${poc.id}`, queryKey: ['items', 'poc', { poc: poc.id }] }} />
 				<DoneSection items={list?.done ?? []} today={today} title="Hechas" defaultOpen />
 
-				<PocAdmins poc={poc} admins={data.admins} />
+				<PocPeople poc={poc} people={data.contacts} kind="main" />
+				<PocPeople poc={poc} people={data.contacts} kind="admin" />
+				{poc.partner && <PocPeople poc={poc} people={data.contacts} kind="partner" />}
 
 				<div className="mt-8">
 					<SectionTitle>Notas de la PoC</SectionTitle>

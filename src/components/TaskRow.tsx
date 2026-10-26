@@ -8,7 +8,7 @@ import type { Item } from '../api/types';
 import { cx, plural } from '../lib/format';
 import { useItemOps } from '../lib/ops';
 import { useUI } from '../lib/store';
-import { ChannelIcon, Checkbox, Chip, DueChip, FlagStar, PocTag, ReminderChip, WaitingChip, WhoChip } from './bits';
+import { ChannelIcon, Checkbox, Chip, DueChip, FlagStar, PocDot, PocTag, ReminderChip, WaitingChip, WhoChip } from './bits';
 
 export interface RowOptions {
 	showPoc?: boolean;
@@ -45,6 +45,9 @@ export function TaskRow({ item, today, options = {} }: { item: Item; today: stri
 	};
 
 	const followable = !done && (item.category === 'followup' || item.category === 'poc');
+	// En listas que mezclan cosas (Hoy, Próximos, Follow-ups, Cuentas), las tareas de una PoC empiezan por
+	// «PoC · nombre» para reconocerlas de un vistazo.
+	const pocPrefix = options.showPoc && item.category === 'poc' && item.poc_name;
 
 	return (
 		<motion.div
@@ -82,6 +85,12 @@ export function TaskRow({ item, today, options = {} }: { item: Item; today: stri
 							done ? 'text-fg-3 line-through decoration-fg-3/60' : 'text-fg',
 						)}
 					>
+						{pocPrefix && (
+							<span className="mr-1.5 inline-flex max-w-[60%] translate-y-[-1px] items-center gap-1 rounded-md bg-accent-soft px-1.5 py-px align-middle text-[11.5px] font-semibold text-accent-text">
+								<PocDot color={item.poc_color} className="size-1.5" />
+								<span className="truncate">PoC · {item.poc_name}</span>
+							</span>
+						)}
 						{item.title}
 					</span>
 				</div>
@@ -93,7 +102,7 @@ export function TaskRow({ item, today, options = {} }: { item: Item; today: stri
 						</span>
 					)}
 					{options.showCategory && item.category === 'followup' && <Chip tone="neutral">Follow-up</Chip>}
-					{options.showPoc && item.poc_name && <PocTag name={item.poc_name} color={item.poc_color} />}
+					{options.showPoc && item.poc_name && !pocPrefix && <PocTag name={item.poc_name} color={item.poc_color} />}
 					<WhoChip company={item.company} contact={item.contact} />
 					{item.channel && (
 						<span className="text-fg-3" title="Canal">

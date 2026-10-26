@@ -86,7 +86,7 @@ repo.completeItem(diego.id);
 // ── PoCs ──
 at(-9);
 const cafam = repo.createPoc({ name: 'Cafam', company: 'Cafam', country: 'CO', owner: 'Daniel San Martín', start_date: day(7) });
-repo.addPocAdmin(cafam.id, { name: 'Alida Brigitte Albarracín Veloza', role: 'Líder de seguridad', email: 'brigitte@cafam.com.co' });
+repo.addPocAdmin(cafam.id, { kind: 'main', name: 'Alida Brigitte Albarracín Veloza', role: 'Líder de seguridad', email: 'brigitte@cafam.com.co' });
 repo.addPocAdmin(cafam.id, { name: 'Andrés Gómez', role: 'Analista SOC' });
 const escribir = repo.createItem({
 	category: 'poc',
@@ -127,13 +127,16 @@ repo.setPocStatus(corp.id, {
 // ── Más PoCs, para ver Iberia / LATAM, importes y concluidas ──
 repo.updatePoc(cafam.id, { amount: 15000, currency: 'USD' });
 at(-40);
-const simon = repo.createPoc({ name: 'Simon Electric (TRC)', company: 'Simon Electric', country: 'ES', owner: 'Daniel San Martín', start_date: day(-38) });
+const simon = repo.createPoc({ name: 'Simon Electric (TRC)', company: 'Simon Electric', country: 'ES', partner: 'TRC', owner: 'Daniel San Martín', start_date: day(-38) });
+repo.addPocAdmin(simon.id, { kind: 'partner', name: 'Víctor', role: 'Account manager', email: 'victor@trc.es' });
 repo.applyHubspotDeal(simon.id, { id: '521684904168', name: 'Simon Electric (TRC) - 2026 - Spain', stage: 'PoC', amount: 20000, currency: 'EUR', closeDate: day(35) });
 repo.createItem({ category: 'poc', poc_id: simon.id, title: 'FUP con Víctor de TRC si no hay noticias', due_date: day(3) });
 at(-14);
 repo.createPoc({ name: 'EDP Comercial', company: 'EDP', country: 'PT', owner: 'Alberto Cornejo', start_date: day(-12), amount: 12000, currency: 'EUR' });
 at(-195);
-const gb = repo.createPoc({ name: 'Global Bank (Sofistic)', company: 'Global Bank', country: 'PA', owner: 'Daniel San Martín', start_date: day(-193) });
+const gb = repo.createPoc({ name: 'Global Bank (Sofistic)', company: 'Global Bank', country: 'PA', partner: 'Sofistic', owner: 'Daniel San Martín', start_date: day(-193) });
+repo.addPocAdmin(gb.id, { kind: 'main', name: 'Lisbeth', role: 'Gerente de seguridad' });
+repo.addPocAdmin(gb.id, { kind: 'partner', name: 'Angel', role: 'Preventa', email: 'angel@sofistic.com' });
 repo.applyHubspotDeal(gb.id, { id: '498926522617', name: 'Global Bank (Sofistic) - Panamá - 2026', stage: 'PoC', amount: 22525, currency: 'USD', closeDate: day(96) });
 repo.createItem({ category: 'poc', poc_id: gb.id, title: 'Llamada con Lisbeth (cliente) o Angel (partner)', due_date: day(-5), channel: 'call' });
 at(-3);

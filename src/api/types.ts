@@ -96,6 +96,7 @@ export interface Poc {
 	updated_at: string;
 	closed_at: string | null;
 	owner: string | null;
+	partner: string | null;
 	start_date: string | null;
 	amount: number | null;
 	currency: string | null;
@@ -107,9 +108,13 @@ export interface Poc {
 	next: Item | null;
 }
 
+export type ContactKind = 'main' | 'admin' | 'partner';
+
+/** Persona de una PoC (la tabla se llama poc_admins por historia; kind dice qué es). */
 export interface PocAdmin {
 	id: number;
 	poc_id: number;
+	kind: ContactKind;
 	name: string;
 	email: string | null;
 	role: string | null;
@@ -190,7 +195,15 @@ export interface AccountDetail extends AccountSummary {
 	open: Item[];
 	done: Item[];
 	pocs: Poc[];
-	contacts: { name: string; email: string | null; role: string | null; poc: string | null; tasks: number }[];
+	contacts: {
+		name: string;
+		email: string | null;
+		role: string | null;
+		poc: string | null;
+		kind: ContactKind | null;
+		partner: string | null;
+		tasks: number;
+	}[];
 	activity: Activity[];
 	stats: { touches_30d: number; replies_30d: number; avg_response_days: number | null };
 }
@@ -237,6 +250,7 @@ export interface Suggestions {
 	companies: string[];
 	contacts: { value: string; company: string | null }[];
 	owners: string[];
+	partners: string[];
 }
 
 export interface Meta {

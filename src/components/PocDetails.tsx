@@ -1,12 +1,12 @@
 // Ficha de la PoC: owner, fecha de inicio y admins del cliente (los que usarán la plataforma).
 
-import { Banknote, CalendarDays, Clock, Copy, Mail, Plus, UserRound, Users, X } from 'lucide-react';
+import { Banknote, CalendarDays, Clock, Copy, Handshake, Mail, Plus, UserRound, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useState, type KeyboardEvent, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { formatDay } from '../../shared/dates.js';
 import { useActions } from '../api/hooks';
-import type { Poc, PocAdmin } from '../api/types';
+import type { ContactKind, Poc, PocAdmin } from '../api/types';
 import { openExternal } from '../lib/bridge';
 import { cx, initials, plural } from '../lib/format';
 import { formatAmount, openSince, pocAmount } from '../lib/pocs';
@@ -48,9 +48,10 @@ function Fact({ icon, label, children }: { icon: ReactNode; label: string; child
 	);
 }
 
-export function PocFacts({ poc, adminCount, today }: { poc: Poc; adminCount: number; today: string }) {
+export function PocFacts({ poc, today }: { poc: Poc; today: string }) {
 	const a = useActions();
 	const owner = useDraft(poc.owner, (v) => a.updatePoc(poc.id, { owner: v }));
+	const partner = useDraft(poc.partner, (v) => a.updatePoc(poc.id, { partner: v }));
 	const amount = pocAmount(poc);
 	const manualAmount = useDraft(poc.amount == null ? '' : poc.amount.toLocaleString('es-ES'), (v) =>
 		a.updatePoc(poc.id, { amount: v as unknown as number, currency: poc.currency ?? 'EUR' }),
@@ -110,10 +111,14 @@ export function PocFacts({ poc, adminCount, today }: { poc: Poc; adminCount: num
 					</div>
 				)}
 			</Fact>
-			<Fact icon={<Users />} label="Admins del cliente">
-				<div className="flex h-6 items-center text-[13px] font-medium">
-					{adminCount ? plural(adminCount, 'admin', 'admins') : <span className="font-normal text-fg-3">Ninguno todavía</span>}
-				</div>
+			<Fact icon={<Handshake />} label="Partner">
+				<input
+					{...partner}
+					list="zd-partners"
+					placeholder="Sin partner"
+					onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+					className="h-6 w-full min-w-0 bg-transparent text-[13px] font-medium outline-none placeholder:font-normal placeholder:text-fg-3"
+				/>
 			</Fact>
 		</div>
 	);
@@ -148,10 +153,10 @@ function AdminRow({ admin, color }: { admin: PocAdmin; color: string | null }) {
 					</IconButton>
 				)}
 				<IconButton
-					label="Quitar admin"
+					label="Quitar"
 					onClick={async () => {
 						await a.deleteAdmin(admin.id);
-						toast('Admin quitado', {
+						toast('Contacto quitado', {
 							description: admin.name,
 							action: { label: 'Deshacer', onClick: () => a.addAdmin(admin.poc_id, admin) },
 						});
@@ -164,20 +169,41 @@ function AdminRow({ admin, color }: { admin: PocAdmin; color: string | null }) {
 	);
 }
 
-export function PocAdmins({ poc, admins }: { poc: Poc; admins: PocAdmin[] }) {
+const PEOPLE: Record<ContactKind, { title: (p: Poc) => string; hint: (p: Poc) => string; noun: string }> = {
+	main: {
+		title: () => 'Contacto principal',
+		hint: () => 'La persona del cliente con la que llevas la PoC.',
+		noun: 'contacto',
+	},
+	admin: {
+		title: () => 'Admins del cliente',
+		hint: () => 'Quienes van a usar la plataforma durante la PoC.',
+		noun: 'admin',
+	},
+	partner: {
+		title: (p) => `Contacto del partner · ${p.partner}`,
+		hint: (p) => `Con quién hablas en ${p.partner}.`,
+		noun: 'contacto',
+	},
+};
+
+/** Una lista de personas de la PoC (contacto principal, admins o contacto del partner), editable en línea. */
+export function PocPeople({ poc, people, kind }: { poc: Poc; people: PocAdmin[]; kind: ContactKind }) {
 	const a = useActions();
 	const [form, setForm] = useState({ name: '', role: '', email: '' });
-	const emails = admins.map((x) => x.email).filter(Boolean) as string[];
+	const list = people.filter((x) => x.kind === kind);
+	const emails = list.map((x) => x.email).filter(Boolean) as string[];
+	const meta = PEOPLE[kind];
 
 	const add = async () => {
 		if (!form.name.trim()) return;
-		await a.addAdmin(poc.id, form);
+		await a.addAdmin(poc.id, { ...form, kind });
 		setForm({ name: '', role: '', email: '' });
 	};
 
 	const copyEmails = async () => {
 		await navigator.clipboard.writeText(emails.join(', '));
-		toast.success(plural(emails.length, 'email copiado', 'emails copiados'), { description: 'Listos para pegar en la invitación.' });
+		toast.success(plural(emails.length, 'email copiado', 'emails copiados'));
 	};
 
 	const set = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm({ ...form, [k]: e.target.value });
@@ -194,20 +220,26 @@ export function PocAdmins({ poc, admins }: { poc: Poc; admins: PocAdmin[] }) {
 					)
 				}
 			>
-				Admins del cliente
+				{meta.title(poc)}
 			</SectionTitle>
-			<p className="mb-2 text-[12px] text-fg-3">Quienes van a usar la plataforma durante la PoC.</p>
+			<p className="mb-2 text-[12px] text-fg-3">{meta.hint(poc)}</p>
 			<div className="flex flex-col">
 				<AnimatePresence initial={false}>
-					{admins.map((admin) => (
-						<AdminRow key={admin.id} admin={admin} color={poc.color} />
+					{list.map((person) => (
+						<AdminRow key={person.id} admin={person} color={poc.color} />
 					))}
 				</AnimatePresence>
 			</div>
 			<div className="mt-2 flex items-center gap-2">
 				<input value={form.name} onChange={set('name')} onKeyDown={onKey} placeholder="Nombre" className={cx(inputClass, 'flex-[1.5]')} />
 				<input value={form.role} onChange={set('role')} onKeyDown={onKey} placeholder="Cargo" className={cx(inputClass, 'flex-1')} />
-				<input value={form.email} onChange={set('email')} onKeyDown={onKey} placeholder="email@cliente.com" className={cx(inputClass, 'flex-[1.3]')} />
+				<input
+					value={form.email}
+					onChange={set('email')}
+					onKeyDown={onKey}
+					placeholder={kind === 'partner' ? 'email@partner.com' : 'email@cliente.com'}
+					className={cx(inputClass, 'flex-[1.3]')}
+				/>
 				<Button onClick={add} disabled={!form.name.trim()} icon={<Plus className="size-3.5" />}>
 					Añadir
 				</Button>
