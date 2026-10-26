@@ -87,6 +87,7 @@ export interface Poc {
 	hubspot_name: string | null;
 	hubspot_stage: string | null;
 	hubspot_amount: number | null;
+	hubspot_currency: string | null;
 	hubspot_close_date: string | null;
 	hubspot_synced_at: string | null;
 	notes: string | null;
@@ -226,6 +227,7 @@ export interface HubspotDeal {
 	name: string | null;
 	stage: string | null;
 	amount: number | null;
+	currency: string | null;
 	closeDate: string | null;
 	url: string | null;
 }

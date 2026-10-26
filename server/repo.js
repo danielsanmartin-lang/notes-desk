@@ -618,6 +618,7 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 				hubspot_name: null,
 				hubspot_stage: null,
 				hubspot_amount: null,
+				hubspot_currency: null,
 				hubspot_close_date: null,
 				hubspot_synced_at: null,
 			});
@@ -745,6 +746,7 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 			hubspot_name: deal.name ?? null,
 			hubspot_stage: deal.stage ?? null,
 			hubspot_amount: deal.amount ?? null,
+			hubspot_currency: deal.currency ?? null,
 			hubspot_close_date: deal.closeDate ?? null,
 			hubspot_synced_at: ts(),
 			...(deal.url ? { hubspot_url: deal.url } : {}),

@@ -80,6 +80,10 @@ mismo número sale en el Dock. Cerrar la ventana no cierra la app (⌘Q sí).
   buscar entre tus deals del pipeline Sales. El token se lee igual que en
   `~/.hermes/scripts/hubspot_fechas.py`: variable `HUBSPOT_TOKEN` o la línea `HUBSPOT_TOKEN=…` de
   `~/.hermes/.env`. Nunca se escribe en HubSpot.
+- **Importar PoCs de HubSpot.** `scripts/import-hubspot-pocs.js deals.json` crea o actualiza una PoC por
+  cada deal en etapa PoC (nombre, empresa, país, owner, fecha de entrada en PoC, importe con su moneda,
+  cierre y enlace) y añade sus tareas abiertas de HubSpot. Se puede repetir sin duplicar y no pisa lo
+  editado a mano. El JSON se saca de HubSpot con Claude (formato en la cabecera del script).
 - **Informe semanal.** `~/.claude/skills/informe-semanal/scripts/hechos_semana.py` lee esta base
   (solo lectura) y añade a los hechos de la semana los toques, respuestas, tareas completadas y
   cambios de estado de PoCs.

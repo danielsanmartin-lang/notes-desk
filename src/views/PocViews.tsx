@@ -407,7 +407,7 @@ function HubspotCard({ poc, today }: { poc: Poc; today: string }) {
 									>
 										<span className="text-[12.5px] font-medium">{d.name}</span>
 										<span className="text-[11px] text-fg-3">
-											{[d.stage, money(d.amount), d.closeDate && `cierre ${formatDay(d.closeDate, today)}`].filter(Boolean).join(' · ')}
+											{[d.stage, money(d.amount, d.currency), d.closeDate && `cierre ${formatDay(d.closeDate, today)}`].filter(Boolean).join(' · ')}
 										</span>
 									</button>
 								))}
@@ -440,7 +440,7 @@ function HubspotCard({ poc, today }: { poc: Poc; today: string }) {
 				<div className="mt-1 truncate text-[13px] font-medium">{poc.hubspot_name ?? `Deal ${poc.hubspot_deal_id}`}</div>
 				<div className="mt-0.5 text-[11.5px] text-fg-2">
 					{[
-						money(poc.hubspot_amount),
+						money(poc.hubspot_amount, poc.hubspot_currency),
 						poc.hubspot_close_date && `cierre ${formatDay(poc.hubspot_close_date, today)}`,
 						poc.hubspot_synced_at ? `actualizado ${formatDay(poc.hubspot_synced_at.slice(0, 10), today)}` : status?.connected ? 'sin sincronizar' : null,
 					]

@@ -12,7 +12,7 @@ const ENV_PATH = path.join(os.homedir(), '.hermes', '.env');
 const API = 'https://api.hubapi.com';
 const OWNER_ID = '34012706';
 const PIPELINE = '1380563180';
-const PROPS = ['dealname', 'dealstage', 'amount', 'closedate', 'pipeline'];
+const PROPS = ['dealname', 'dealstage', 'amount', 'deal_currency_code', 'closedate', 'pipeline'];
 
 export function readToken() {
 	const env = (process.env.HUBSPOT_TOKEN ?? '').trim();
@@ -57,6 +57,7 @@ export function mapDeal(d, portalId) {
 		name: p.dealname ?? null,
 		stage: stageName(p.dealstage),
 		amount: p.amount != null && p.amount !== '' ? Number(p.amount) : null,
+		currency: p.deal_currency_code || null,
 		closeDate: p.closedate ? String(p.closedate).slice(0, 10) : null,
 		url: dealUrl(portalId, d.id),
 	};

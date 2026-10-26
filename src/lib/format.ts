@@ -34,8 +34,14 @@ export function daysWaiting(item: Pick<Item, 'waiting_since'>, today: string) {
 
 export const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
-const MONEY = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
-export const money = (n: number | null) => (n == null ? null : MONEY.format(n));
+export const money = (n: number | null, currency?: string | null) => {
+	if (n == null) return null;
+	try {
+		return new Intl.NumberFormat('es-ES', { style: 'currency', currency: currency || 'EUR', maximumFractionDigits: 0 }).format(n);
+	} catch {
+		return `${n.toLocaleString('es-ES')} ${currency ?? ''}`.trim();
+	}
+};
 
 export const longDate = (s: string) =>
 	new Intl.DateTimeFormat('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }).format(parseDate(s));
