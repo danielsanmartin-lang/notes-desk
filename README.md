@@ -113,6 +113,22 @@ Como en S1, el servidor va dentro de Electron y solo escucha en 127.0.0.1; la AP
 cambia en cada arranque. La UI se habla con él por HTTP, así que en desarrollo se puede abrir en el
 navegador con datos reales.
 
+## Descargar
+
+Cada versión publicada está en [Releases](https://github.com/danielsanmartin-lang/zepo-desk/releases) como
+`Zepo-Desk-X.Y.Z-mac-arm64.zip` (Apple Silicon). Descomprime, arrastra **Zepo Desk.app** a Aplicaciones y,
+la primera vez, clic derecho → **Abrir** (está firmada ad-hoc, no notarizada). Si macOS dice que está
+dañada: `xattr -dr com.apple.quarantine "/Applications/Zepo Desk.app"`.
+
+## Publicar una versión
+
+1. Sube `version` en `package.json` y haz commit.
+2. Escribe las notas en `docs/releases/vX.Y.Z.md` (si no, GitHub las genera con los commits).
+3. `npm run release`: pasa los tests, empaqueta la app, la comprime con `ditto`, crea la etiqueta,
+   la sube y publica la release con el zip.
+
+Cada push a `main` pasa los tests y los tipos en GitHub Actions (`.github/workflows/test.yml`).
+
 ## Recompilar e instalar
 
 ```bash

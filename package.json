@@ -4,6 +4,7 @@
   "private": true,
   "version": "1.0.0",
   "description": "Follow-ups, tareas y PoCs de Zepo en una app de escritorio.",
+  "author": "Daniel San Martín",
   "type": "module",
   "main": "electron/main.js",
   "scripts": {
@@ -17,6 +18,7 @@
     "app:dev": "npm run build && electron .",
     "app:build": "npm run build && electron-builder --mac --arm64 --dir && npm run app:sign",
     "app:sign": "codesign --force --deep --sign - \"release/mac-arm64/Zepo Desk.app\"",
+    "release": "bash scripts/release.sh",
     "app:install": "npm run app:build && osascript -e 'if application \"Zepo Desk\" is running then quit app \"Zepo Desk\"' && sleep 1 ; rm -rf \"/Applications/Zepo Desk.app\" && cp -a \"release/mac-arm64/Zepo Desk.app\" /Applications/"
   },
   "build": {
