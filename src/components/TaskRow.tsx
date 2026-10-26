@@ -8,7 +8,7 @@ import type { Item } from '../api/types';
 import { cx, plural } from '../lib/format';
 import { useItemOps } from '../lib/ops';
 import { useUI } from '../lib/store';
-import { ChannelIcon, Checkbox, Chip, DueChip, FlagStar, PocDot, PocTag, ReminderChip, WaitingChip, WhoChip } from './bits';
+import { ChannelIcon, Checkbox, Chip, DueChip, FlagStar, PocTag, ReminderChip, WaitingChip, WhoChip } from './bits';
 
 export interface RowOptions {
 	showPoc?: boolean;
@@ -86,10 +86,13 @@ export function TaskRow({ item, today, options = {} }: { item: Item; today: stri
 						)}
 					>
 						{pocPrefix && (
-							<span className="mr-1.5 inline-flex max-w-[60%] translate-y-[-1px] items-center gap-1 rounded-md bg-accent-soft px-1.5 py-px align-middle text-[11.5px] font-semibold text-accent-text">
-								<PocDot color={item.poc_color} className="size-1.5" />
-								<span className="truncate">PoC · {item.poc_name}</span>
-							</span>
+							<>
+								<span className="mr-1.5 inline-block translate-y-[-1px] rounded-[5px] bg-accent-soft px-1.5 py-px align-middle text-[10.5px] font-semibold tracking-wide text-accent-text">
+									PoC
+								</span>
+								<span className="font-medium">{item.poc_name}</span>
+								<span className="text-fg-3"> · </span>
+							</>
 						)}
 						{item.title}
 					</span>
