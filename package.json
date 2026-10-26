@@ -2,7 +2,7 @@
   "name": "zepo-desk",
   "productName": "Zepo Desk",
   "private": true,
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Follow-ups, tareas y PoCs de Zepo en una app de escritorio.",
   "author": "Daniel San Martín",
   "type": "module",
