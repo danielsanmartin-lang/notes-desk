@@ -39,7 +39,15 @@ notas, subtareas, una **plantilla de mensaje** (Copiar / abrir en WhatsApp / ema
 
 ### Escribir rápido
 
-En el campo «Añadir…» de cada lista, y en la **captura rápida** (⌥Espacio desde cualquier app):
+En el campo «Añadir…» de cada lista, al empezar a escribir se abre debajo un menú con el **tipo**
+(Tarea, Follow-up o una PoC) y la **fecha** (Sin fecha, Hoy, Mañana, viernes, próximo lunes… u
+Otra). Lo que entiende del texto aparece ya marcado; lo que eliges en el menú manda. Tab cambia el
+tipo. Por defecto una tarea nueva **no lleva fecha** (en Próximos 7 días, mañana). En la página de
+una PoC el menú solo ofrece la fecha.
+
+El tipo de una tarea ya creada se cambia en su panel, fila **Tipo** (Tarea / Follow-up / PoC).
+
+Lo mismo se entiende en la **captura rápida** (⌥Espacio desde cualquier app):
 
 | Escribes | Entiende |
 | --- | --- |

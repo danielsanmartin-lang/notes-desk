@@ -184,7 +184,7 @@ export function AccountView({ name }: { name: string }) {
 					/>
 				</div>
 
-				<Composer defaults={{ category: 'followup', company: data.name }} placeholder={`Nuevo follow-up para ${data.name}… (#tarea para una tarea)`} />
+				<Composer defaults={{ category: 'followup', company: data.name }} placeholder={`Nuevo follow-up o tarea para ${data.name}…`} />
 
 				{data.pocs.length > 0 && (
 					<section className="mb-6">

@@ -1,5 +1,6 @@
 import {
 	ArrowRight,
+	ChevronDown,
 	Bell,
 	Building2,
 	CalendarDays,
@@ -12,6 +13,7 @@ import {
 	Plus,
 	Reply,
 	Send,
+	Shapes,
 	Star,
 	Trash2,
 	User,
@@ -31,7 +33,7 @@ import { Checkbox, PocDot, WaitingChip } from './bits';
 import { DatePicker, ReminderPicker } from './DatePicker';
 import { ChannelPicker, ReplyForm, TouchForm } from './FollowupForms';
 import { Timeline } from './Timeline';
-import { AutoTextarea, Button, IconButton, inputClass, Menu, MenuItem, MenuLabel, MenuSeparator, Popover, SectionTitle, useDraft } from './ui';
+import { AutoTextarea, Button, IconButton, inputClass, Menu, MenuItem, Popover, SectionTitle, useDraft } from './ui';
 
 export function DetailPanel({ id }: { id: number }) {
 	const select = useUI((s) => s.select);
@@ -147,29 +149,6 @@ function DetailBody({
 							</IconButton>
 						}
 					>
-						{!item.parent_id && (
-							<>
-								<MenuLabel>Mover a</MenuLabel>
-								{item.category !== 'followup' && (
-									<MenuItem icon={<Send />} onSelect={() => save({ category: 'followup' })}>
-										Follow-ups
-									</MenuItem>
-								)}
-								{item.category !== 'task' && (
-									<MenuItem icon={<ArrowRight />} onSelect={() => save({ category: 'task' })}>
-										Tareas pendientes
-									</MenuItem>
-								)}
-								{activePocs
-									.filter((p) => p.id !== item.poc_id)
-									.map((p) => (
-										<MenuItem key={p.id} icon={<PocDot color={p.color} />} onSelect={() => save({ category: 'poc', poc_id: p.id })}>
-											{p.name}
-										</MenuItem>
-									))}
-								<MenuSeparator />
-							</>
-						)}
 						<MenuItem
 							icon={<Copy />}
 							onSelect={() => {
@@ -280,6 +259,22 @@ function DetailBody({
 				)}
 
 				<div className="mt-4 space-y-0.5">
+					<Row icon={<Shapes />} label="Tipo">
+						{item.parent_id ? (
+							<span className="px-2 text-[12.5px] text-fg-3">Subtarea: el tipo lo marca su tarea madre</span>
+						) : (
+							<TypePicker
+								item={item}
+								pocs={activePocs}
+								onChange={async (category, pocId) => {
+									await save({ category, poc_id: pocId ?? null });
+									toast.success(
+										category === 'poc' ? `Movida a ${activePocs.find((p) => p.id === pocId)?.name}` : category === 'followup' ? 'Ahora es un follow-up' : 'Ahora es una tarea',
+									);
+								}}
+							/>
+						)}
+					</Row>
 					<Row icon={<CalendarDays />} label={item.state === 'waiting' ? 'Próximo FUP' : 'Fecha'}>
 						<DatePicker value={item.due_date} onChange={(v) => save({ due_date: v })} />
 					</Row>
@@ -408,6 +403,60 @@ function DetailBody({
 				</div>
 			</div>
 		</>
+	);
+}
+
+function TypePicker({
+	item,
+	pocs,
+	onChange,
+}: {
+	item: Item;
+	pocs: { id: number; name: string; color: string | null }[];
+	onChange: (category: Item['category'], pocId?: number) => void;
+}) {
+	const seg = (on: boolean) =>
+		cx(
+			'inline-flex h-6.5 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium transition-colors',
+			on ? 'bg-raised text-fg shadow-sm' : 'text-fg-3 hover:text-fg-2',
+		);
+	return (
+		<div className="inline-flex gap-0.5 rounded-lg bg-hover p-0.5">
+			<button type="button" onClick={() => item.category !== 'task' && onChange('task')} className={seg(item.category === 'task')}>
+				Tarea
+			</button>
+			<button type="button" onClick={() => item.category !== 'followup' && onChange('followup')} className={seg(item.category === 'followup')}>
+				Follow-up
+			</button>
+			<Menu
+				align="start"
+				trigger={
+					<button type="button" className={seg(item.category === 'poc')}>
+						{item.category === 'poc' ? (
+							<>
+								<PocDot color={item.poc_color} className="size-1.5" />
+								<span className="max-w-28 truncate">{item.poc_name}</span>
+							</>
+						) : (
+							'PoC'
+						)}
+						<ChevronDown className="size-3" />
+					</button>
+				}
+			>
+				{pocs.length ? (
+					pocs.map((p) => (
+						<MenuItem key={p.id} icon={<PocDot color={p.color} />} onSelect={() => p.id !== item.poc_id && onChange('poc', p.id)}>
+							{p.name}
+						</MenuItem>
+					))
+				) : (
+					<MenuItem disabled onSelect={() => {}}>
+						No hay PoCs activas
+					</MenuItem>
+				)}
+			</Menu>
+		</div>
 	);
 }
 

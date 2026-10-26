@@ -32,7 +32,7 @@ export function TodayView() {
 				subtitle={capFirst(longDate(today))}
 			/>
 			<ViewBody>
-				<Composer defaults={{ category: 'task', due_date: today }} placeholder="Añadir para hoy… (prueba «FUP Catalina BCI #fup»)" />
+				<Composer defaults={{ category: 'task' }} placeholder="Nueva tarea o follow-up… (elige tipo y fecha al escribir)" />
 				{!isLoading && !items.length && !undated.length && (
 					<EmptyState icon={(data?.done.length ?? 0) > 0 ? <PartyPopper /> : <Coffee />} title={(data?.done.length ?? 0) > 0 ? 'Todo hecho por hoy' : 'Nada pendiente para hoy'}>
 						{(data?.done.length ?? 0) > 0

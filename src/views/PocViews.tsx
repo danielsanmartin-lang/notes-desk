@@ -623,7 +623,7 @@ export function PocView({ id }: { id: number }) {
 					<span className="text-[12px] text-fg-2">{poc.total ? `${poc.done} de ${poc.total}` : 'Sin tareas'}</span>
 				</div>
 
-				<Composer defaults={{ category: 'poc', poc_id: poc.id }} placeholder="Añadir tarea a la PoC… (prueba «Kickoff con Brigitte el jueves»)" />
+				<Composer lockCategory defaults={{ category: 'poc', poc_id: poc.id }} placeholder="Añadir tarea a la PoC… (prueba «Kickoff con Brigitte el jueves»)" />
 				<TaskList items={items} today={today} options={{ sortable: true, listKey: `poc-${poc.id}`, queryKey: ['items', 'poc', { poc: poc.id }] }} />
 				<DoneSection items={list?.done ?? []} today={today} title="Hechas" defaultOpen />
 
