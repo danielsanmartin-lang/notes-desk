@@ -97,6 +97,8 @@ export interface Poc {
 	closed_at: string | null;
 	owner: string | null;
 	start_date: string | null;
+	amount: number | null;
+	currency: string | null;
 	admin_count: number;
 	total: number;
 	done: number;
@@ -124,7 +126,7 @@ export interface Counts {
 	followups_due: number;
 	tasks: number;
 	trash: number;
-	pocs: Pick<Poc, 'id' | 'name' | 'color' | 'status' | 'paused_until' | 'total' | 'done' | 'waiting'>[];
+	pocs: Pick<Poc, 'id' | 'name' | 'color' | 'status' | 'paused_until' | 'country' | 'total' | 'done' | 'waiting'>[];
 }
 
 export interface WeekSummary {
@@ -193,8 +195,31 @@ export interface AccountDetail extends AccountSummary {
 	stats: { touches_30d: number; replies_30d: number; avg_response_days: number | null };
 }
 
+export type RegionKey = 'iberia' | 'latam' | 'none';
+export interface MoneySum {
+	currency: string;
+	value: number;
+}
+export interface PocSummary {
+	active: number;
+	paused: number;
+	won: number;
+	lost: number;
+	win_rate: number | null;
+	avg_days: number | null;
+	amounts: MoneySum[];
+	won_amounts: MoneySum[];
+}
+
 export interface Stats {
 	weeks: number;
+	region: 'all' | 'iberia' | 'latam';
+	activity_by_region: { region: RegionKey; touches: number; done: number; replies: number }[];
+	regions: (PocSummary & { region: RegionKey })[];
+	countries: { country: string; region: RegionKey; n: number; amounts: MoneySum[] }[];
+	poc_days: { id: number; name: string; color: string | null; country: string | null; region: RegionKey; days: number }[];
+	closes: { month: string; iberia: number; latam: number; none: number; amounts: MoneySum[] }[];
+	closes_earlier: number;
 	from: string;
 	to: string;
 	totals: { done: number; touches: number; replies: number };
@@ -205,7 +230,7 @@ export interface Stats {
 	waiting_buckets: { label: string; level: 'ok' | 'warn' | 'late' | 'cold'; n: number }[];
 	channels: { channel: Channel | 'none'; n: number }[];
 	accounts: { name: string; touches: number; done: number; replies: number; total: number }[];
-	pocs: { active: number; paused: number; won: number; lost: number; win_rate: number | null; avg_days: number | null };
+	pocs: PocSummary;
 }
 
 export interface Suggestions {

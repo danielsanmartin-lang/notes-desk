@@ -104,7 +104,7 @@ export function startServer({ repo, port = 0, token = null, staticDir = null, me
 
 	r.get('/accounts', (req, res) => res.json(repo.listAccounts()));
 	r.get('/accounts/:name', (req, res) => res.json(repo.getAccount(req.params.name)));
-	r.get('/stats', (req, res) => res.json(repo.stats(req.query.weeks)));
+	r.get('/stats', (req, res) => res.json(repo.stats(req.query.weeks, req.query.region)));
 	r.get('/weeks', (req, res) => res.json(repo.listWeeks()));
 	r.get('/weeks/:week', (req, res) => res.json(repo.getWeek(req.params.week)));
 	r.get('/search', (req, res) => res.json(repo.search(String(req.query.q ?? ''))));

@@ -40,27 +40,41 @@ export function DetailPanel({ id }: { id: number }) {
 	const { data, isError } = useItem(id);
 	const today = useToday();
 
+	// El ancho del panel se anima de 0 a 400 px: la columna central se estrecha y se ensancha a la vez,
+	// sin quedarse un hueco que luego se rellena de golpe. El contenido, fijo a 400 px, se desliza encima.
 	return (
 		<motion.aside
-			initial={{ x: 40, opacity: 0 }}
-			animate={{ x: 0, opacity: 1 }}
-			exit={{ x: 40, opacity: 0 }}
-			transition={{ type: 'spring', stiffness: 420, damping: 36 }}
-			className="flex h-full w-[400px] shrink-0 flex-col border-l border-line bg-panel"
+			initial={{ width: 0 }}
+			animate={{ width: PANEL_WIDTH }}
+			exit={{ width: 0 }}
+			transition={PANEL_EASE}
+			className="h-full shrink-0 overflow-hidden"
 		>
-			{isError ? (
-				<div className="p-6 text-[13px] text-fg-2">
-					Esta tarea ya no existe.{' '}
-					<button className="text-accent-text" onClick={() => select(null)}>
-						Cerrar
-					</button>
-				</div>
-			) : !data ? null : (
-				<DetailBody key={data.item.id} item={data.item} subtasks={data.subtasks} activity={data.activity} today={today} />
-			)}
+			<motion.div
+				initial={{ x: 24, opacity: 0 }}
+				animate={{ x: 0, opacity: 1 }}
+				exit={{ x: 24, opacity: 0 }}
+				transition={PANEL_EASE}
+				style={{ width: PANEL_WIDTH }}
+				className="flex h-full flex-col border-l border-line bg-panel"
+			>
+				{isError ? (
+					<div className="p-6 text-[13px] text-fg-2">
+						Esta tarea ya no existe.{' '}
+						<button className="text-accent-text" onClick={() => select(null)}>
+							Cerrar
+						</button>
+					</div>
+				) : !data ? null : (
+					<DetailBody key={data.item.id} item={data.item} subtasks={data.subtasks} activity={data.activity} today={today} />
+				)}
+			</motion.div>
 		</motion.aside>
 	);
 }
+
+const PANEL_WIDTH = 400;
+const PANEL_EASE = { type: 'tween', duration: 0.26, ease: [0.32, 0.72, 0, 1] } as const;
 
 function Row({ icon, label, children }: { icon: ReactNode; label: string; children: ReactNode }) {
 	return (

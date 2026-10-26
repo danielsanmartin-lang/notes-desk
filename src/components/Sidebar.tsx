@@ -14,6 +14,7 @@ import {
 	SquareCheckBig,
 	Sun,
 	Trash2,
+	Trophy,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useState, type ReactNode } from 'react';
@@ -21,6 +22,7 @@ import { useCounts } from '../api/hooks';
 import type { Category } from '../api/types';
 import { isElectron } from '../lib/bridge';
 import { cx } from '../lib/format';
+import { region, REGION_LABEL, REGIONS } from '../lib/pocs';
 import { sameView, useUI, type View } from '../lib/store';
 import { PocDot, ProgressRing } from './bits';
 import { Logo } from './Logo';
@@ -96,6 +98,9 @@ export function Sidebar() {
 	const setNewPocOpen = useUI((s) => s.setNewPocOpen);
 	const [pocsOpen, setPocsOpen] = useState(true);
 	const pocs = c?.pocs.filter((p) => p.status === 'active' || p.status === 'paused') ?? [];
+	const closedCount = c?.pocs.filter((p) => p.status === 'won' || p.status === 'lost').length ?? 0;
+	// Bajo «PoCs en curso», agrupadas por región (solo se rotula si hay más de una).
+	const byRegion = REGIONS.map((r) => ({ r, list: pocs.filter((p) => region(p.country) === r) })).filter((g) => g.list.length);
 
 	return (
 		<nav className="sidebar-surface flex h-full w-[232px] shrink-0 flex-col border-r border-line bg-sidebar">
@@ -175,26 +180,32 @@ export function Sidebar() {
 				<AnimatePresence initial={false}>
 					{pocsOpen && (
 						<motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="space-y-0.5 overflow-hidden">
-							{pocs.map((p) => (
-								<NavItem
-									key={p.id}
-									indent
-									view={{ kind: 'poc', id: p.id }}
-									icon={<PocDot color={p.color} />}
-									label={p.name}
-									drop={{ category: 'poc', poc_id: p.id, label: p.name }}
-									right={
-										p.status === 'paused' ? (
-											<Pause className="size-3 text-fg-3" aria-label="En pausa" />
-										) : p.total ? (
-											<ProgressRing done={p.done} total={p.total} color={p.color} size={13} />
-										) : null
-									}
-								/>
+							{byRegion.map(({ r, list }) => (
+								<div key={r} className="space-y-0.5">
+									{byRegion.length > 1 && <div className="pt-1.5 pb-0.5 pl-7 text-[10.5px] font-medium tracking-wide text-fg-3 uppercase">{REGION_LABEL[r]}</div>}
+									{list.map((p) => (
+										<NavItem
+											key={p.id}
+											indent
+											view={{ kind: 'poc', id: p.id }}
+											icon={<PocDot color={p.color} />}
+											label={p.name}
+											drop={{ category: 'poc', poc_id: p.id, label: p.name }}
+											right={
+												p.status === 'paused' ? (
+													<Pause className="size-3 text-fg-3" aria-label="En pausa" />
+												) : p.total ? (
+													<ProgressRing done={p.done} total={p.total} color={p.color} size={13} />
+												) : null
+											}
+										/>
+									))}
+								</div>
 							))}
 						</motion.div>
 					)}
 				</AnimatePresence>
+				<NavItem view={{ kind: 'pocs-closed' }} icon={<Trophy />} iconClass="text-ok" label="PoCs concluidas" count={closedCount} />
 
 				<div className="px-2 pt-4 pb-1 text-[11px] font-semibold tracking-wide text-fg-3 uppercase">Visión general</div>
 				<NavItem view={{ kind: 'accounts' }} icon={<Building2 />} iconClass="text-accent" label="Cuentas" />

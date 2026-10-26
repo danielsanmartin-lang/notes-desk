@@ -3,16 +3,19 @@
 
 import {
 	addDays,
+	daysBetween,
 	isoWeek,
 	isValidDate,
 	isValidDateTime,
 	isValidWeek,
+	parseDate,
 	skipWeekend,
 	toDateStr,
 	toDateTimeStr,
 	weekRange,
 } from '../shared/dates.js';
 import { parseHubspotRef } from '../shared/hubspot.js';
+import { regionOf, sumByCurrency } from '../shared/pocs.js';
 
 export class HttpError extends Error {
 	constructor(status, message) {
@@ -79,6 +82,17 @@ const emptyToNull = (v) => {
 	return s === '' ? null : s;
 };
 
+/** 12500, "12.500", "12.500,50" o "9000.5" → número; vacío → null. */
+function parseAmount(v) {
+	if (v == null || v === '') return null;
+	if (typeof v === 'number') return v;
+	let s = String(v).replace(/[\s€$]|US/g, '');
+	if (!s) return null;
+	if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+	else if (/^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '');
+	return Number(s);
+}
+
 const pick = (obj, keys) => Object.fromEntries(keys.map((k) => [k, obj[k]]));
 
 const itemOut = (row) => row && { ...row, flagged: !!row.flagged };
@@ -96,6 +110,7 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 	const weekStart = () => weekRange(isoWeek(today())).start;
 
 	db.function('fold', { deterministic: true }, (v) => (v == null ? null : fold(v)));
+	db.function('region', { deterministic: true }, (country) => regionOf(country));
 
 	const get = (sql, params = {}) => db.prepare(sql).get(params);
 	const all = (sql, params = {}) => db.prepare(sql).all(params);
@@ -539,7 +554,7 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 			followups_due: n(`${FOLLOWUPS_COND} AND i.due_date <= @today`),
 			tasks: n(TASKS_COND),
 			trash: n(`i.deleted_at IS NOT NULL AND (par.id IS NULL OR par.deleted_at IS NULL)`),
-			pocs: listPocs().map((x) => pick(x, ['id', 'name', 'color', 'status', 'paused_until', 'total', 'done', 'waiting'])),
+			pocs: listPocs().map((x) => pick(x, ['id', 'name', 'color', 'status', 'paused_until', 'country', 'total', 'done', 'waiting'])),
 		};
 	}
 
@@ -593,6 +608,16 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 		}
 		for (const k of ['company', 'notes']) if (k in data) out[k] = emptyToNull(data[k]);
 		if ('owner' in data) out.owner = emptyToNull(data.owner)?.slice(0, 120) ?? null;
+		if ('amount' in data) {
+			const n = parseAmount(data.amount);
+			if (n != null && (!Number.isFinite(n) || n < 0)) throw bad('El importe tiene que ser un número');
+			out.amount = n;
+		}
+		if ('currency' in data) {
+			const c = emptyToNull(data.currency);
+			if (c && !/^[A-Za-z]{3}$/.test(c)) throw bad('La moneda va en tres letras (EUR, USD…)');
+			out.currency = c ? c.toUpperCase() : null;
+		}
 		if ('start_date' in data) {
 			const v = emptyToNull(data.start_date);
 			if (v && !isValidDate(v)) throw bad('Fecha de inicio no válida');
@@ -982,22 +1007,42 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 
 	// ── Estadísticas ───────────────────────────────────────────────────────────
 
-	function stats(weeksParam = 12) {
+	function stats(weeksParam = 12, regionParam = null) {
 		const weeks = Math.min(104, Math.max(4, Number(weeksParam) || 12));
+		const R = regionParam === 'iberia' || regionParam === 'latam' ? regionParam : null;
 		const t = today();
 		const monday = weekRange(isoWeek(t)).start;
 		const from = addDays(monday, -(weeks - 1) * 7);
 		const to = addDays(t, 1);
 		const prevFrom = addDays(from, -weeks * 7);
+		const P = { from, to, prevFrom, region: R, today: t };
+		const RF = R ? 'AND region = @region' : '';
+
+		// País de una tarea: el de su PoC o, si no tiene, el de la PoC de su misma cuenta (empresa).
+		const accountCountry = (companyExpr) =>
+			`(SELECT pp.country FROM pocs pp WHERE pp.country IS NOT NULL AND pp.company IS NOT NULL AND fold(pp.company) = fold(${companyExpr}) LIMIT 1)`;
+		// Cada hecho de la bitácora con su semana, su cuenta y su región.
+		const ACT = `WITH act AS (
+			SELECT a.kind, a.channel, a.meta, a.occurred_at, a.item_id,
+			       strftime('%G-W%V', a.occurred_at) AS week,
+			       coalesce(nullif(i.company, ''), p.company) AS account,
+			       region(coalesce(p.country, ${accountCountry('i.company')})) AS region
+			FROM activity a
+			LEFT JOIN items i ON i.id = a.item_id
+			LEFT JOIN pocs p ON p.id = coalesce(i.poc_id, a.poc_id)
+			WHERE a.kind <> 'created' AND (i.id IS NULL OR i.deleted_at IS NULL))`;
+		const ITEM_REGION = `region(coalesce(p.country, ${accountCountry('i.company')}))`;
+		const IRF = R ? `AND ${ITEM_REGION} = @region` : '';
+
 		const count = (kind, a, b) =>
-			get('SELECT COUNT(*) AS n FROM activity WHERE kind = @kind AND occurred_at >= @a AND occurred_at < @b', { kind, a, b }).n;
+			get(`${ACT} SELECT COUNT(*) AS n FROM act WHERE kind = '${kind}' AND occurred_at >= @${a} AND occurred_at < @${b} ${RF}`, P).n;
 		const totals = (a, b) => ({ done: count('done', a, b), touches: count('touch', a, b), replies: count('reply', a, b) });
 
 		const byWeek = new Map(
 			all(
-				`SELECT week, SUM(kind = 'done') AS done, SUM(kind = 'touch') AS touches, SUM(kind = 'reply') AS replies
-				 FROM v_week_log WHERE occurred_at >= @from GROUP BY week`,
-				{ from },
+				`${ACT} SELECT week, SUM(kind = 'done') AS done, SUM(kind = 'touch') AS touches, SUM(kind = 'reply') AS replies
+				 FROM act WHERE occurred_at >= @from ${RF} GROUP BY week`,
+				P,
 			).map((r) => [r.week, r]),
 		);
 		const weekly = Array.from({ length: weeks }, (_, i) => {
@@ -1008,20 +1053,18 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 
 		// De los follow-ups que tocaste en el periodo, cuántos han respondido después.
 		const touched = all(
-			`SELECT item_id, min(occurred_at) AS first FROM activity
-			 WHERE kind = 'touch' AND item_id IS NOT NULL AND occurred_at >= @from AND occurred_at < @to GROUP BY item_id`,
-			{ from, to },
+			`${ACT} SELECT item_id, min(occurred_at) AS first FROM act
+			 WHERE kind = 'touch' AND item_id IS NOT NULL AND occurred_at >= @from AND occurred_at < @to ${RF} GROUP BY item_id`,
+			P,
 		);
-		const repliesSince = all(`SELECT item_id, occurred_at FROM activity WHERE kind = 'reply' AND occurred_at >= @from`, { from });
+		const repliesSince = all(`${ACT} SELECT item_id, occurred_at, meta FROM act WHERE kind = 'reply' AND occurred_at >= @from ${RF}`, P);
 		const answered = touched.filter((x) => repliesSince.some((r) => r.item_id === x.item_id && r.occurred_at > x.first)).length;
-		const periodReplies = all(`SELECT occurred_at, meta FROM activity WHERE kind = 'reply' AND occurred_at >= @from AND occurred_at < @to`, {
-			from,
-			to,
-		});
+		const periodReplies = repliesSince.filter((r) => r.occurred_at < to);
 
+		const itemsFrom = `FROM items i LEFT JOIN pocs p ON p.id = i.poc_id LEFT JOIN items par ON par.id = i.parent_id`;
 		const waitingNow = all(
-			`SELECT i.waiting_since FROM items i LEFT JOIN pocs p ON p.id = i.poc_id LEFT JOIN items par ON par.id = i.parent_id
-			 WHERE ${VISIBLE} AND i.state = 'waiting' AND i.parent_id IS NULL AND ${ACTIVE_POC}`,
+			`SELECT i.waiting_since ${itemsFrom} WHERE ${VISIBLE} AND i.state = 'waiting' AND i.parent_id IS NULL AND ${ACTIVE_POC} ${IRF}`,
+			P,
 		);
 		const buckets = [
 			{ label: '0–3 días', level: 'ok', max: 3, n: 0 },
@@ -1030,43 +1073,99 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 			{ label: 'Más de 14', level: 'cold', max: Infinity, n: 0 },
 		];
 		for (const w of waitingNow) {
-			const d = w.waiting_since ? Math.round((new Date(`${t}T00:00:00`) - new Date(`${w.waiting_since.slice(0, 10)}T00:00:00`)) / 86400000) : 0;
+			const d = w.waiting_since ? daysBetween(w.waiting_since.slice(0, 10), t) : 0;
 			buckets.find((b) => d <= b.max).n++;
 		}
 
 		const channels = all(
-			`SELECT coalesce(channel, 'none') AS channel, COUNT(*) AS n FROM activity
-			 WHERE kind = 'touch' AND occurred_at >= @from AND occurred_at < @to GROUP BY channel ORDER BY n DESC`,
-			{ from, to },
+			`${ACT} SELECT coalesce(channel, 'none') AS channel, COUNT(*) AS n FROM act
+			 WHERE kind = 'touch' AND occurred_at >= @from AND occurred_at < @to ${RF} GROUP BY channel ORDER BY n DESC`,
+			P,
 		);
 
 		const names = accountNames();
 		const accounts = all(
-			`SELECT fold(coalesce(nullif(i.company, ''), pi.company, pa.company)) AS k,
-			        SUM(a.kind = 'touch') AS touches, SUM(a.kind = 'done') AS done, SUM(a.kind = 'reply') AS replies
-			 FROM activity a LEFT JOIN items i ON i.id = a.item_id
-			 LEFT JOIN pocs pi ON pi.id = i.poc_id LEFT JOIN pocs pa ON pa.id = a.poc_id
-			 WHERE a.kind IN ('touch', 'done', 'reply') AND a.occurred_at >= @from AND a.occurred_at < @to AND k IS NOT NULL
+			`${ACT} SELECT fold(account) AS k, SUM(kind = 'touch') AS touches, SUM(kind = 'done') AS done, SUM(kind = 'reply') AS replies
+			 FROM act WHERE kind IN ('touch', 'done', 'reply') AND occurred_at >= @from AND occurred_at < @to AND account IS NOT NULL ${RF}
 			 GROUP BY k`,
-			{ from, to },
+			P,
 		)
 			.map((r) => ({ name: names.get(r.k.trim()) ?? r.k, touches: r.touches, done: r.done, replies: r.replies, total: r.touches + r.done + r.replies }))
 			.sort((a, b) => b.total - a.total)
 			.slice(0, 8);
 
-		const pocRows = all(`SELECT status, start_date, created_at, closed_at FROM pocs`);
-		const byStatus = (s) => pocRows.filter((r) => r.status === s).length;
-		const closed = pocRows.filter((r) => r.closed_at && (r.status === 'won' || r.status === 'lost'));
-		const durations = closed.map((r) => (new Date(r.closed_at) - new Date(r.start_date ?? r.created_at)) / 86400000).filter((d) => d >= 0);
-		const won = byStatus('won');
-		const lost = byStatus('lost');
+		const activityByRegion = ['iberia', 'latam', 'none'].map((region) => {
+			const r = get(
+				`${ACT} SELECT SUM(kind = 'touch') AS touches, SUM(kind = 'done') AS done, SUM(kind = 'reply') AS replies
+				 FROM act WHERE occurred_at >= @from AND occurred_at < @to AND region = @r`,
+				{ ...P, r: region },
+			);
+			return { region, touches: r.touches ?? 0, done: r.done ?? 0, replies: r.replies ?? 0 };
+		});
+
+		// ── PoCs (con su importe efectivo: el del deal o el manual) ──
+		const allPocs = listPocs();
+		const inRegion = R ? allPocs.filter((p) => regionOf(p.country) === R) : allPocs;
+		const inCourse = (list) => list.filter((p) => p.status === 'active' || p.status === 'paused');
+		const summary = (list) => {
+			const n = (s) => list.filter((p) => p.status === s).length;
+			const won = n('won');
+			const lost = n('lost');
+			const durations = list
+				.filter((p) => p.closed_at && (p.status === 'won' || p.status === 'lost'))
+				.map((p) => daysBetween((p.start_date ?? p.created_at).slice(0, 10), p.closed_at.slice(0, 10)))
+				.filter((d) => d >= 0);
+			return {
+				active: n('active'),
+				paused: n('paused'),
+				won,
+				lost,
+				win_rate: won + lost ? Math.round((won / (won + lost)) * 100) : null,
+				avg_days: durations.length ? Math.round(durations.reduce((x, y) => x + y, 0) / durations.length) : null,
+				amounts: sumByCurrency(inCourse(list)),
+				won_amounts: sumByCurrency(list.filter((p) => p.status === 'won')),
+			};
+		};
+		const regions = ['iberia', 'latam', 'none']
+			.map((region) => ({ region, ...summary(allPocs.filter((p) => regionOf(p.country) === region)) }))
+			.filter((r) => r.region !== 'none' || r.active + r.paused + r.won + r.lost > 0);
+
+		const countryMap = new Map();
+		for (const p of inCourse(inRegion)) {
+			const k = p.country ?? 'none';
+			if (!countryMap.has(k)) countryMap.set(k, []);
+			countryMap.get(k).push(p);
+		}
+		const countries = [...countryMap]
+			.map(([country, list]) => ({ country, region: regionOf(country === 'none' ? null : country), n: list.length, amounts: sumByCurrency(list) }))
+			.sort((a, b) => (a.country === 'none') - (b.country === 'none') || b.n - a.n || a.country.localeCompare(b.country));
+
+		const pocDays = inRegion
+			.filter((p) => p.status === 'active' && p.start_date && p.start_date <= t)
+			.map((p) => ({ id: p.id, name: p.name, color: p.color, country: p.country, region: regionOf(p.country), days: Math.max(0, daysBetween(p.start_date, t)) }))
+			.sort((a, b) => b.days - a.days);
+
+		// Cierres previstos (fecha de cierre del deal) de las PoCs en curso, mes a mes durante un año.
+		const firstMonth = t.slice(0, 7);
+		const monthKeys = Array.from({ length: 12 }, (_, i) => {
+			const d = parseDate(`${firstMonth}-01`);
+			d.setMonth(d.getMonth() + i);
+			return toDateStr(d).slice(0, 7);
+		});
+		const closes = monthKeys.map((month) => {
+			const list = inCourse(inRegion).filter((p) => p.hubspot_close_date?.slice(0, 7) === month);
+			const by = (r) => list.filter((p) => regionOf(p.country) === r).length;
+			return { month, iberia: by('iberia'), latam: by('latam'), none: by('none'), amounts: sumByCurrency(list) };
+		});
+		const closesEarlier = inCourse(inRegion).filter((p) => p.hubspot_close_date && p.hubspot_close_date.slice(0, 7) < firstMonth).length;
 
 		return {
 			weeks,
+			region: R ?? 'all',
 			from,
 			to: t,
-			totals: totals(from, to),
-			previous: totals(prevFrom, from),
+			totals: totals('from', 'to'),
+			previous: totals('prevFrom', 'from'),
 			response: {
 				touched: touched.length,
 				answered,
@@ -1074,29 +1173,21 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 				avg_days: avgResponseDays(periodReplies),
 			},
 			now: {
-				mine: get(
-					`SELECT COUNT(*) AS n FROM items i LEFT JOIN pocs p ON p.id = i.poc_id LEFT JOIN items par ON par.id = i.parent_id
-					 WHERE ${VISIBLE} AND ${ACTIVE_POC} AND i.state = 'todo' AND i.parent_id IS NULL`,
-				).n,
+				mine: get(`SELECT COUNT(*) AS n ${itemsFrom} WHERE ${VISIBLE} AND ${ACTIVE_POC} AND i.state = 'todo' AND i.parent_id IS NULL ${IRF}`, P).n,
 				waiting: waitingNow.length,
-				overdue: get(
-					`SELECT COUNT(*) AS n FROM items i LEFT JOIN pocs p ON p.id = i.poc_id LEFT JOIN items par ON par.id = i.parent_id
-					 WHERE ${VISIBLE} AND ${ACTIVE_POC} AND ${OPEN} AND i.due_date < @today`,
-					{ today: t },
-				).n,
+				overdue: get(`SELECT COUNT(*) AS n ${itemsFrom} WHERE ${VISIBLE} AND ${ACTIVE_POC} AND ${OPEN} AND i.due_date < @today ${IRF}`, P).n,
 			},
 			weekly,
 			waiting_buckets: buckets.map(({ label, level, n }) => ({ label, level, n })),
 			channels,
 			accounts,
-			pocs: {
-				active: byStatus('active'),
-				paused: byStatus('paused'),
-				won,
-				lost,
-				win_rate: won + lost ? Math.round((won / (won + lost)) * 100) : null,
-				avg_days: durations.length ? Math.round(durations.reduce((x, y) => x + y, 0) / durations.length) : null,
-			},
+			activity_by_region: activityByRegion,
+			pocs: summary(inRegion),
+			regions,
+			countries,
+			poc_days: pocDays,
+			closes,
+			closes_earlier: closesEarlier,
 		};
 	}
 

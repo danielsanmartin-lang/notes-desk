@@ -13,6 +13,7 @@ import {
 	SquareCheckBig,
 	Sun,
 	Trash2,
+	Trophy,
 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { fold } from '../../shared/quickparse.js';
@@ -57,6 +58,7 @@ export function CommandPalette() {
 		{ id: 'go-fup', label: 'Ir a Follow-ups', icon: <Send />, hint: '⌘3', run: nav({ kind: 'followups' }) },
 		{ id: 'go-tasks', label: 'Ir a Tareas pendientes', icon: <SquareCheckBig />, hint: '⌘4', run: nav({ kind: 'tasks' }) },
 		{ id: 'go-pocs', label: 'Ir a PoCs en curso', icon: <FlaskConical />, hint: '⌘5', run: nav({ kind: 'pocs' }) },
+		{ id: 'go-pocs-closed', label: 'Ir a PoCs concluidas', icon: <Trophy />, run: nav({ kind: 'pocs-closed' }) },
 		{ id: 'go-accounts', label: 'Ir a Cuentas', icon: <Building2 />, hint: '⌘6', run: nav({ kind: 'accounts' }) },
 		{ id: 'go-stats', label: 'Ir a Estadísticas', icon: <BarChart3 />, hint: '⌘7', run: nav({ kind: 'stats' }) },
 		{ id: 'go-weeks', label: 'Ir a Semanas', icon: <Archive />, hint: '⌘8', run: nav({ kind: 'weeks' }) },

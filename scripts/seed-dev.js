@@ -124,4 +124,27 @@ repo.setPocStatus(corp.id, {
 	body: 'Matías habla con su jefa: en principio no van a hacer PoC hasta Q1',
 });
 
+// ── Más PoCs, para ver Iberia / LATAM, importes y concluidas ──
+repo.updatePoc(cafam.id, { amount: 15000, currency: 'USD' });
+at(-40);
+const simon = repo.createPoc({ name: 'Simon Electric (TRC)', company: 'Simon Electric', country: 'ES', owner: 'Daniel San Martín', start_date: day(-38) });
+repo.applyHubspotDeal(simon.id, { id: '521684904168', name: 'Simon Electric (TRC) - 2026 - Spain', stage: 'PoC', amount: 20000, currency: 'EUR', closeDate: day(35) });
+repo.createItem({ category: 'poc', poc_id: simon.id, title: 'FUP con Víctor de TRC si no hay noticias', due_date: day(3) });
+at(-14);
+repo.createPoc({ name: 'EDP Comercial', company: 'EDP', country: 'PT', owner: 'Alberto Cornejo', start_date: day(-12), amount: 12000, currency: 'EUR' });
+at(-195);
+const gb = repo.createPoc({ name: 'Global Bank (Sofistic)', company: 'Global Bank', country: 'PA', owner: 'Daniel San Martín', start_date: day(-193) });
+repo.applyHubspotDeal(gb.id, { id: '498926522617', name: 'Global Bank (Sofistic) - Panamá - 2026', stage: 'PoC', amount: 22525, currency: 'USD', closeDate: day(96) });
+repo.createItem({ category: 'poc', poc_id: gb.id, title: 'Llamada con Lisbeth (cliente) o Angel (partner)', due_date: day(-5), channel: 'call' });
+at(-3);
+repo.createPoc({ name: 'Piloto interno', company: 'Zepo Labs', owner: 'Daniel San Martín' });
+at(-90);
+const sonae = repo.createPoc({ name: 'Sonae', company: 'Sonae', country: 'PT', owner: 'Alberto Cornejo', start_date: day(-80), amount: 18000, currency: 'EUR' });
+at(-20);
+repo.setPocStatus(sonae.id, { status: 'won', body: 'Firmado' });
+at(-130);
+const pichincha = repo.createPoc({ name: 'Banco Pichincha', company: 'Banco Pichincha', country: 'EC', owner: 'Daniel San Martín', start_date: day(-120), amount: 30000, currency: 'USD' });
+at(-30);
+repo.setPocStatus(pichincha.id, { status: 'lost', body: 'Eligen otro proveedor' });
+
 console.log(`dev.db sembrada en ${dbPath}`);

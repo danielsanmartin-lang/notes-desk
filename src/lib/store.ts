@@ -6,6 +6,7 @@ export type View =
 	| { kind: 'followups' }
 	| { kind: 'tasks' }
 	| { kind: 'pocs' }
+	| { kind: 'pocs-closed' }
 	| { kind: 'poc'; id: number }
 	| { kind: 'accounts' }
 	| { kind: 'account'; name: string }

@@ -20,15 +20,21 @@ SQLite local.
   - **Han respondido**: vuelve a *Me toca*, o se cierra.
   - Cuando llega la fecha y sigue sin respuesta, salta a *Hoy* como «Toca volver a perseguir».
 - **Tareas pendientes**: lista libre, se reordena arrastrando.
-- **PoCs en curso**: una tarjeta por PoC (progreso, siguiente tarea, etapa de HubSpot). Dentro, su
+- **PoCs en curso**: separadas en **Iberia** (España, Portugal y Andorra) arriba y **LATAM** debajo
+  (y «Sin país» si falta), con el total de importe por moneda de cada región. Barra de filtros
+  (búsqueda, estado, país, owner), orden (importe, inicio, creación, cierre previsto, progreso, último
+  movimiento, nombre) y vista en **tarjetas o lista**. El importe es el del deal de HubSpot o, si no
+  hay deal, uno a mano en la ficha. Las ganadas y perdidas pasan a **PoCs concluidas**, con su resumen.
+- Cada PoC: una tarjeta (importe, progreso, siguiente tarea, etapa de HubSpot). Dentro, su
   checklist, notas, historial, el enlace al deal y **Pausar hasta…** (sus tareas desaparecen de Hoy y
   vuelven solas cuando termina la pausa). Al crearla se puede partir de una plantilla de checklist.
 - **Cuentas**: salen solas de la empresa de cada tarea y de cada PoC (sin distinguir mayúsculas ni
   acentos). Cada cuenta reúne lo que te toca, lo que espera respuesta, sus PoCs, los contactos
   (incluidos los admins de sus PoCs), lo completado en 30 días y su historial.
-- **Estadísticas**: completadas, toques y respuestas por semana (con el periodo anterior), tasa y
+- **Estadísticas** (filtrables por Todas / Iberia / LATAM): completadas, toques y respuestas por semana (con el periodo anterior), tasa y
   tiempo medio de respuesta, follow-ups esperando según antigüedad, toques por canal, cuentas con
-  más actividad y resumen de PoCs. Periodo de 4 semanas a 1 año.
+  más actividad, actividad por región, PoCs por región y por país, días que lleva cada PoC y cierres
+  previstos por mes. Periodo de 4 semanas a 1 año.
 - **Semanas**: por cada semana ISO (W44 · 26 oct – 1 nov), lo completado, los toques y las respuestas.
   **Copiar resumen** lo deja en markdown en el portapapeles.
 - **Papelera**: lo borrado se recupera hasta que la vacías.

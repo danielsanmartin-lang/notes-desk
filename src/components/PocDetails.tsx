@@ -1,6 +1,6 @@
 // Ficha de la PoC: owner, fecha de inicio y admins del cliente (los que usarán la plataforma).
 
-import { CalendarDays, Copy, Mail, Plus, UserRound, Users, X } from 'lucide-react';
+import { Banknote, CalendarDays, Copy, Mail, Plus, UserRound, Users, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useState, type KeyboardEvent, type ReactNode } from 'react';
 import { toast } from 'sonner';
@@ -9,6 +9,7 @@ import { useActions } from '../api/hooks';
 import type { Poc, PocAdmin } from '../api/types';
 import { openExternal } from '../lib/bridge';
 import { cx, initials, plural } from '../lib/format';
+import { formatAmount, pocAmount } from '../lib/pocs';
 import { Chip } from './bits';
 import { DatePicker } from './DatePicker';
 import { Button, IconButton, inputClass, SectionTitle, useDraft } from './ui';
@@ -48,10 +49,14 @@ function Fact({ icon, label, children }: { icon: ReactNode; label: string; child
 export function PocFacts({ poc, adminCount, today }: { poc: Poc; adminCount: number; today: string }) {
 	const a = useActions();
 	const owner = useDraft(poc.owner, (v) => a.updatePoc(poc.id, { owner: v }));
+	const amount = pocAmount(poc);
+	const manualAmount = useDraft(poc.amount == null ? '' : poc.amount.toLocaleString('es-ES'), (v) =>
+		a.updatePoc(poc.id, { amount: v as unknown as number, currency: poc.currency ?? 'EUR' }),
+	);
 	const day = pocDayLabel(poc.start_date, today);
 
 	return (
-		<div className="mb-4 grid grid-cols-3 gap-2.5">
+		<div className="mb-4 grid grid-cols-4 gap-2.5">
 			<Fact icon={<UserRound />} label="Owner">
 				<div className="flex items-center gap-2">
 					{poc.owner && <Avatar name={poc.owner} color={poc.color} size={22} />}
@@ -77,6 +82,33 @@ export function PocFacts({ poc, adminCount, today }: { poc: Poc; adminCount: num
 						</button>
 					}
 				/>
+			</Fact>
+			<Fact icon={<Banknote />} label="Importe">
+				{amount?.source === 'hubspot' ? (
+					<div className="flex h-6 items-baseline gap-1.5" title="Viene del deal de HubSpot">
+						<span className="text-[13px] font-semibold">{formatAmount(amount)}</span>
+						<span className="text-[11px] text-fg-3">de HubSpot</span>
+					</div>
+				) : (
+					<div className="flex h-6 items-center gap-1">
+						<input
+							{...manualAmount}
+							inputMode="decimal"
+							placeholder="Sin importe"
+							onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+							className="h-6 min-w-0 flex-1 bg-transparent text-[13px] font-semibold outline-none placeholder:font-normal placeholder:text-fg-3"
+						/>
+						<select
+							value={poc.currency ?? 'EUR'}
+							onChange={(e) => a.updatePoc(poc.id, { currency: e.target.value })}
+							className="h-6 rounded bg-transparent text-[12px] text-fg-2 outline-none hover:bg-hover"
+							aria-label="Moneda"
+						>
+							<option value="EUR">€</option>
+							<option value="USD">US$</option>
+						</select>
+					</div>
+				)}
 			</Fact>
 			<Fact icon={<Users />} label="Admins del cliente">
 				<div className="flex h-6 items-center text-[13px] font-medium">

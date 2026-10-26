@@ -280,3 +280,50 @@ test('estadísticas del periodo: totales, respuesta, espera y canales', () => {
 	assert.deepEqual(s.channels.map((c) => c.channel).sort(), ['email', 'whatsapp']);
 	assert.equal(s.accounts[0].name, 'BCI');
 });
+
+test('importe manual de una PoC', () => {
+	const poc = repo.createPoc({ name: 'Grandvalira', country: 'AD', amount: '12.500', currency: 'eur' });
+	assert.equal(poc.amount, 12500);
+	assert.equal(poc.currency, 'EUR');
+	assert.equal(repo.updatePoc(poc.id, { amount: 9000.5 }).amount, 9000.5);
+	assert.equal(repo.updatePoc(poc.id, { amount: '' }).amount, null);
+	assert.throws(() => repo.updatePoc(poc.id, { amount: 'mucho' }), /número/);
+	assert.throws(() => repo.updatePoc(poc.id, { currency: 'euros' }), /tres letras/);
+});
+
+test('estadísticas por región y país', () => {
+	const simon = repo.createPoc({ name: 'Simon Electric', company: 'Simon Electric', country: 'ES', start_date: '2026-09-18', amount: 20000, currency: 'EUR' });
+	repo.createPoc({ name: 'Primax', company: 'Primax', country: 'PE', start_date: '2026-10-08', amount: 15000, currency: 'USD' });
+	const omint = repo.createPoc({ name: 'Grupo Omint', company: 'Grupo Omint', country: 'AR', amount: 20000, currency: 'USD' });
+	repo.updatePoc(omint.id, {});
+	repo.applyHubspotDeal(omint.id, { id: '1', name: 'Omint', closeDate: '2026-11-30', amount: 20000, currency: 'USD' });
+	repo.setPocStatus(repo.createPoc({ name: 'Ganada', country: 'PT' }).id, { status: 'won' });
+
+	// Un follow-up sin PoC pero de la misma cuenta que Simon Electric cuenta como Iberia.
+	const fup = repo.createItem({ category: 'followup', title: 'FUP Simon', company: 'simon electric' });
+	repo.touchItem(fup.id, { channel: 'email' });
+	const lat = repo.createItem({ category: 'poc', poc_id: omint.id, title: 'FUP Omint' });
+	repo.touchItem(lat.id, { channel: 'whatsapp' });
+	repo.touchItem(repo.createItem({ category: 'task', title: 'Sin región' }).id, {});
+
+	const all = repo.stats(4);
+	assert.equal(all.totals.touches, 3);
+	assert.deepEqual(all.activity_by_region.map((r) => [r.region, r.touches]), [['iberia', 1], ['latam', 1], ['none', 1]]);
+	assert.deepEqual(all.regions.map((r) => [r.region, r.active, r.won]), [['iberia', 1, 1], ['latam', 2, 0]]);
+	assert.deepEqual(all.regions[1].amounts, [{ currency: 'USD', value: 35000 }]);
+
+	const iberia = repo.stats(4, 'iberia');
+	assert.equal(iberia.region, 'iberia');
+	assert.equal(iberia.totals.touches, 1);
+	assert.deepEqual(iberia.channels.map((c) => c.channel), ['email']);
+	assert.equal(iberia.now.waiting, 1);
+	assert.deepEqual(iberia.countries.map((c) => c.country), ['ES']);
+	assert.deepEqual(iberia.poc_days.map((p) => [p.name, p.days]), [['Simon Electric', 38]]);
+
+	const latam = repo.stats(4, 'latam');
+	assert.deepEqual(latam.countries.map((c) => c.country), ['AR', 'PE']);
+	assert.equal(latam.closes[1].month, '2026-11');
+	assert.equal(latam.closes[1].latam, 1);
+	assert.equal(latam.pocs.active, 2);
+	assert.equal(simon.country, 'ES');
+});

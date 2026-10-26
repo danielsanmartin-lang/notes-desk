@@ -44,8 +44,12 @@ export const useAccount = (name: string) =>
 		queryFn: () => api<AccountDetail>(`/accounts/${encodeURIComponent(name)}`),
 		retry: false,
 	});
-export const useStats = (weeks: number) =>
-	useQuery({ queryKey: ['stats', weeks], queryFn: () => api<Stats>(`/stats?${qs({ weeks })}`), placeholderData: (prev) => prev });
+export const useStats = (weeks: number, region: string) =>
+	useQuery({
+		queryKey: ['stats', weeks, region],
+		queryFn: () => api<Stats>(`/stats?${qs({ weeks, region: region === 'all' ? undefined : region })}`),
+		placeholderData: (prev) => prev,
+	});
 export const useWeeks = () => useQuery({ queryKey: ['weeks'], queryFn: () => api<WeekSummary[]>('/weeks') });
 export const useWeek = (week: string | undefined) =>
 	useQuery({ queryKey: ['week', week], queryFn: () => api<WeekDetail>(`/weeks/${week}`), enabled: !!week });

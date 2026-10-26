@@ -103,13 +103,18 @@ export function StackedColumns<K extends string>({
 	series,
 	labelOf,
 	tooltipTitle,
+	tooltipExtra,
 	height = 200,
+	label = 'Gráfica de columnas',
 }: {
 	data: (Record<K, number> & { id: string })[];
 	series: StackSeries<K>[];
 	labelOf: (d: { id: string }) => string;
 	tooltipTitle: (d: { id: string }) => string;
+	/** Línea extra al pie del tooltip (por ejemplo, el importe). */
+	tooltipExtra?: (d: { id: string }) => string | null;
 	height?: number;
+	label?: string;
 }) {
 	const [ref, width] = useWidth<HTMLDivElement>();
 	const [hover, setHover] = useState<number | null>(null);
@@ -128,7 +133,7 @@ export function StackedColumns<K extends string>({
 	return (
 		<div ref={ref} className="relative w-full select-none" style={{ height }}>
 			{width > 0 && (
-				<svg width={width} height={height} role="img" aria-label="Actividad por semana">
+				<svg width={width} height={height} role="img" aria-label={label}>
 					{ticks.map((t) => {
 						const y = padT + plotH - t * k;
 						return (
@@ -194,6 +199,7 @@ export function StackedColumns<K extends string>({
 							<span className="font-medium tabular-nums">{data[hover][s.key]}</span>
 						</div>
 					))}
+					{tooltipExtra?.(data[hover]) && <div className="mt-1 border-t border-line pt-1 text-fg-2">{tooltipExtra(data[hover])}</div>}
 				</div>
 			)}
 		</div>

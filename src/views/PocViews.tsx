@@ -1,6 +1,5 @@
 import {
 	Building2,
-	ChevronRight,
 	Ellipsis,
 	ExternalLink,
 	FlaskConical,
@@ -31,7 +30,9 @@ import {
 } from '../api/hooks';
 import type { Poc } from '../api/types';
 import { Chip, DueChip, EmptyState, PocDot, ProgressBar } from '../components/bits';
+import { StatTile } from '../components/charts';
 import { Composer } from '../components/Composer';
+import { PocFilters, type PocViewMode } from '../components/PocFilters';
 import { Avatar, PocAdmins, pocDayLabel, PocFacts } from '../components/PocDetails';
 import { DoneSection, TaskList } from '../components/TaskList';
 import { Timeline } from '../components/Timeline';
@@ -51,6 +52,24 @@ import {
 } from '../components/ui';
 import { openExternal } from '../lib/bridge';
 import { cx, flagEmoji, money, plural } from '../lib/format';
+import {
+	DEFAULT_DIR,
+	EMPTY_FILTERS,
+	filterPocs,
+	formatAmount,
+	hasFilters,
+	pocAmount,
+	region,
+	REGION_LABEL,
+	REGIONS,
+	sortPocs,
+	totalsByCurrency,
+	usePersistentState,
+	type PocFilterState,
+	type PocSort,
+	type Region,
+	type SortKey,
+} from '../lib/pocs';
 import { useUI } from '../lib/store';
 import { useListIds, ViewBody, ViewHeader } from './common';
 
@@ -80,6 +99,7 @@ function StatusChip({ poc, today }: { poc: Pick<Poc, 'status' | 'paused_until'>;
 export function PocCard({ poc, today }: { poc: Poc; today: string }) {
 	const go = useUI((s) => s.go);
 	const idle = poc.last_activity_at ? daysBetween(poc.last_activity_at.slice(0, 10), today) : null;
+	const amount = pocAmount(poc);
 	return (
 		<motion.button
 			layout
@@ -102,7 +122,13 @@ export function PocCard({ poc, today }: { poc: Poc; today: string }) {
 					</span>
 				)}
 			</div>
-			<div className="mt-2.5 flex flex-wrap gap-1.5">
+			<div className="mt-2.5 flex items-baseline justify-between gap-2">
+				<span className={cx('text-[19px] leading-6 font-semibold', !amount && 'text-[13px] font-normal text-fg-3')}>
+					{formatAmount(amount) ?? 'Sin importe'}
+				</span>
+				{poc.hubspot_close_date && <span className="shrink-0 text-[11.5px] text-fg-3">Cierre {formatDay(poc.hubspot_close_date, today)}</span>}
+			</div>
+			<div className="mt-2 flex flex-wrap gap-1.5">
 				<StatusChip poc={poc} today={today} />
 				{poc.hubspot_stage && <Chip tone="teal">HubSpot · {poc.hubspot_stage}</Chip>}
 				{poc.waiting > 0 && <Chip tone="warn">{poc.waiting} esperando</Chip>}
@@ -126,7 +152,12 @@ export function PocCard({ poc, today }: { poc: Poc; today: string }) {
 				<ProgressBar done={poc.done} total={poc.total} color={poc.color} />
 			</div>
 			<div className="mt-3 min-h-9 border-t border-line pt-2.5 text-[12px]">
-				{poc.next ? (
+				{(poc.status === 'won' || poc.status === 'lost') && poc.closed_at ? (
+					<span className="text-fg-2">
+						{poc.status === 'won' ? 'Ganada' : 'Perdida'} el {formatDay(poc.closed_at.slice(0, 10), today)}
+						{poc.start_date && <span className="text-fg-3"> · {Math.max(0, daysBetween(poc.start_date, poc.closed_at.slice(0, 10)))} días de PoC</span>}
+					</span>
+				) : poc.next ? (
 					<div className="flex items-center gap-2">
 						<span className="text-fg-3">Siguiente</span>
 						<span className="min-w-0 flex-1 truncate text-fg">{poc.next.title}</span>
@@ -135,73 +166,236 @@ export function PocCard({ poc, today }: { poc: Poc; today: string }) {
 				) : (
 					<span className="text-fg-3">{poc.total ? 'Todas las tareas hechas' : 'Añade la primera tarea'}</span>
 				)}
-				{idle != null && idle > 0 && <div className="mt-0.5 text-[11px] text-fg-3">Último movimiento hace {plural(idle, 'día', 'días')}</div>}
+				{idle != null && idle > 0 && poc.status !== 'won' && poc.status !== 'lost' && (
+					<div className="mt-0.5 text-[11px] text-fg-3">Último movimiento hace {plural(idle, 'día', 'días')}</div>
+				)}
 			</div>
 		</motion.button>
 	);
 }
 
-export function PocsView() {
+// Columnas de la vista lista. Las que tienen `sort` se pueden ordenar pulsando su cabecera.
+const COLUMNS: { label: string; sort?: SortKey; className?: string }[] = [
+	{ label: 'PoC', sort: 'name' },
+	{ label: 'Estado' },
+	{ label: 'Owner' },
+	{ label: 'Inicio', sort: 'start' },
+	{ label: 'Importe', sort: 'amount', className: 'justify-end' },
+	{ label: 'Cierre', sort: 'close' },
+	{ label: 'Progreso', sort: 'progress' },
+	{ label: 'Siguiente tarea' },
+];
+const LIST_GRID = 'grid grid-cols-[minmax(170px,1.6fr)_118px_minmax(90px,0.8fr)_96px_96px_82px_100px_minmax(140px,1.4fr)] items-center gap-3';
+
+function PocTable({ pocs, today, sort, onSort }: { pocs: Poc[]; today: string; sort: PocSort; onSort: (s: PocSort) => void }) {
+	const go = useUI((s) => s.go);
+	return (
+		<div className="overflow-x-auto rounded-xl border border-line bg-raised">
+			<div className={cx(LIST_GRID, 'min-w-[980px] border-b border-line px-3 py-2 text-[11px] font-semibold text-fg-3')}>
+				{COLUMNS.map((c) =>
+					c.sort ? (
+						<button
+							key={c.label}
+							type="button"
+							onClick={() => onSort({ key: c.sort!, dir: sort.key === c.sort ? (sort.dir === 'asc' ? 'desc' : 'asc') : DEFAULT_DIR[c.sort!] })}
+							className={cx('flex items-center gap-1 text-left hover:text-fg-2', c.className, sort.key === c.sort && 'text-fg')}
+						>
+							{c.label}
+							{sort.key === c.sort && <span aria-hidden="true">{sort.dir === 'asc' ? '↑' : '↓'}</span>}
+						</button>
+					) : (
+						<span key={c.label} className={cx('flex', c.className)}>
+							{c.label}
+						</span>
+					),
+				)}
+			</div>
+			{pocs.map((p) => {
+				const amount = pocAmount(p);
+				return (
+					<button
+						key={p.id}
+						type="button"
+						onClick={() => go({ kind: 'poc', id: p.id })}
+						className={cx(LIST_GRID, 'min-w-[980px] w-full border-b border-line px-3 py-2.5 text-left text-[12.5px] last:border-b-0 hover:bg-hover')}
+					>
+						<span className="flex min-w-0 items-center gap-2">
+							<PocDot color={p.color} />
+							<span className="min-w-0">
+								<span className="block truncate font-medium">
+									{p.name} <span className="font-normal">{flagEmoji(p.country)}</span>
+								</span>
+								<span className="block truncate text-[11.5px] text-fg-3">{p.company ?? '—'}</span>
+							</span>
+						</span>
+						<span className="min-w-0">
+							<StatusChip poc={p} today={today} />
+						</span>
+						<span className="flex min-w-0 items-center gap-1.5">
+							{p.owner ? (
+								<>
+									<Avatar name={p.owner} color={p.color} size={20} />
+									<span className="truncate text-fg-2">{p.owner.split(' ')[0]}</span>
+								</>
+							) : (
+								<span className="text-fg-3">—</span>
+							)}
+						</span>
+						<span className="min-w-0 text-fg-2">
+							{p.start_date ? formatDay(p.start_date, today) : '—'}
+							{p.start_date && p.status === 'active' && <span className="block text-[11px] text-fg-3">{pocDayLabel(p.start_date, today)}</span>}
+						</span>
+						<span className={cx('text-right font-semibold tabular-nums', !amount && 'font-normal text-fg-3')}>{formatAmount(amount) ?? '—'}</span>
+						<span className="text-fg-2">{p.hubspot_close_date ? formatDay(p.hubspot_close_date, today) : '—'}</span>
+						<span className="flex items-center gap-2">
+							<span className="w-12">
+								<ProgressBar done={p.done} total={p.total} color={p.color} />
+							</span>
+							<span className="text-[11.5px] text-fg-3 tabular-nums">{p.total ? `${p.done}/${p.total}` : '—'}</span>
+						</span>
+						<span className="flex min-w-0 items-center gap-1.5">
+							{p.next ? (
+								<>
+									<span className="truncate">{p.next.title}</span>
+									{p.next.due_date && <DueChip date={p.next.due_date} today={today} />}
+								</>
+							) : (
+								<span className="text-fg-3">—</span>
+							)}
+						</span>
+					</button>
+				);
+			})}
+		</div>
+	);
+}
+
+const REGION_ICON: Record<Region, string> = { iberia: '🇪🇸 🇵🇹', latam: '🌎', none: '🏳️' };
+
+const OPEN_STATUSES = [
+	{ value: 'all' as const, label: 'Todas' },
+	{ value: 'active' as const, label: 'Activas' },
+	{ value: 'paused' as const, label: 'En pausa' },
+];
+const CLOSED_STATUSES = [
+	{ value: 'all' as const, label: 'Todas' },
+	{ value: 'won' as const, label: 'Ganadas' },
+	{ value: 'lost' as const, label: 'Perdidas' },
+];
+
+/** Tablero de PoCs (en curso o concluidas) con filtros, orden, tarjetas o lista y secciones por región. */
+function PocBoard({ closed }: { closed: boolean }) {
 	const today = useToday();
 	const { data: pocs = [], isLoading } = usePocs();
 	const setNewPocOpen = useUI((s) => s.setNewPocOpen);
-	const [showClosed, setShowClosed] = useState(false);
-	const active = pocs.filter((p) => p.status === 'active');
-	const paused = pocs.filter((p) => p.status === 'paused');
-	const closed = pocs.filter((p) => p.status === 'won' || p.status === 'lost');
+	const [filters, setFilters] = usePersistentState<PocFilterState>(`zd.pocs.${closed ? 'closed' : 'open'}.filters`, EMPTY_FILTERS);
+	const [sort, setSort] = usePersistentState<PocSort>('zd.pocs.sort', { key: 'amount', dir: 'desc' });
+	const [view, setView] = usePersistentState<{ mode: PocViewMode }>('zd.pocs.view', { mode: 'cards' });
 	useListIds([]);
 
-	const grid = (list: Poc[]) => (
-		<div className="grid grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-3">
-			{list.map((p) => (
-				<PocCard key={p.id} poc={p} today={today} />
-			))}
-		</div>
-	);
+	const base = pocs.filter((p) => (closed ? p.status === 'won' || p.status === 'lost' : p.status === 'active' || p.status === 'paused'));
+	const shown = sortPocs(filterPocs(base, filters), sort);
+	const won = base.filter((p) => p.status === 'won');
+	const lost = base.filter((p) => p.status === 'lost');
 
 	return (
 		<>
 			<ViewHeader
-				icon={<FlaskConical />}
-				iconClass="bg-[#7F77DD]/15 text-[#7F77DD]"
-				title="PoCs en curso"
-				subtitle={`${plural(active.length, 'activa', 'activas')} · ${paused.length} en pausa`}
+				icon={closed ? <Trophy /> : <FlaskConical />}
+				iconClass={closed ? 'bg-ok-soft text-ok' : 'bg-[#7F77DD]/15 text-[#7F77DD]'}
+				title={closed ? 'PoCs concluidas' : 'PoCs en curso'}
+				subtitle={
+					closed
+						? `${plural(won.length, 'ganada', 'ganadas')} · ${plural(lost.length, 'perdida', 'perdidas')}`
+						: `${plural(base.filter((p) => p.status === 'active').length, 'activa', 'activas')} · ${base.filter((p) => p.status === 'paused').length} en pausa`
+				}
 				right={
-					<Button variant="primary" icon={<Plus className="size-3.5" />} onClick={() => setNewPocOpen(true)}>
-						Nueva PoC
-					</Button>
+					!closed && (
+						<Button variant="primary" icon={<Plus className="size-3.5" />} onClick={() => setNewPocOpen(true)}>
+							Nueva PoC
+						</Button>
+					)
 				}
 			/>
-			<ViewBody className="max-w-[980px]">
-				{!isLoading && !pocs.length && (
-					<EmptyState icon={<FlaskConical />} title="Ninguna PoC todavía">
-						Crea una PoC para llevar su checklist: lo que te toca hacer, lo que esperas del cliente y su deal de HubSpot.
-					</EmptyState>
+			<ViewBody className="max-w-[1180px]">
+				{closed && base.length > 0 && (
+					<div className="mb-5 grid grid-cols-4 gap-2.5">
+						<StatTile label="Ganadas" value={won.length} />
+						<StatTile label="Perdidas" value={lost.length} />
+						<StatTile label="Tasa de éxito" value={won.length + lost.length ? `${Math.round((won.length / (won.length + lost.length)) * 100)}%` : '—'} />
+						<StatTile label="Importe ganado" value={<span className="text-[18px]">{totalsByCurrency(won) ?? '—'}</span>} />
+					</div>
 				)}
-				{active.length > 0 && grid(active)}
-				{paused.length > 0 && (
+				{!isLoading && !base.length ? (
+					closed ? (
+						<EmptyState icon={<Trophy />} title="Aún no hay PoCs concluidas">
+							Cuando marques una PoC como ganada o perdida, pasará aquí con su resumen.
+						</EmptyState>
+					) : (
+						<EmptyState icon={<FlaskConical />} title="Ninguna PoC en curso">
+							Crea una PoC para llevar su checklist: lo que te toca hacer, lo que esperas del cliente y su deal de HubSpot.
+						</EmptyState>
+					)
+				) : (
 					<>
-						<div className="mt-7 mb-2.5 text-[12px] font-semibold text-fg-2">En pausa</div>
-						{grid(paused)}
-					</>
-				)}
-				{closed.length > 0 && (
-					<>
-						<button
-							type="button"
-							onClick={() => setShowClosed(!showClosed)}
-							className="mt-7 mb-2.5 flex items-center gap-1 text-[12px] font-semibold text-fg-3 hover:text-fg-2"
-						>
-							<ChevronRight className={cx('size-3.5 transition-transform', showClosed && 'rotate-90')} />
-							Cerradas · {closed.length}
-						</button>
-						{showClosed && grid(closed)}
+						<PocFilters
+							pocs={base}
+							filters={filters}
+							onFilters={setFilters}
+							sort={sort}
+							onSort={setSort}
+							mode={view.mode}
+							onMode={(mode) => setView({ mode })}
+							statuses={closed ? CLOSED_STATUSES : OPEN_STATUSES}
+						/>
+						{REGIONS.map((r) => {
+							const list = shown.filter((p) => region(p.country) === r);
+							const all = base.filter((p) => region(p.country) === r);
+							// Con filtros, las regiones sin resultados no ocupan sitio (si todo queda vacío, un solo aviso abajo).
+							if (!all.length || (hasFilters(filters) && !list.length)) return null;
+							const total = totalsByCurrency(list);
+							return (
+								<section key={r} className="mb-8">
+									<div className="mb-3 flex items-baseline gap-2.5">
+										<h2 className="font-display text-[16px] font-semibold">
+											<span className="mr-1.5 text-[14px]">{REGION_ICON[r]}</span>
+											{REGION_LABEL[r]}
+										</h2>
+										<span className="text-[12px] text-fg-3">{plural(list.length, 'PoC', 'PoCs')}</span>
+										{total && <span className="text-[12.5px] font-medium text-fg-2">{total}</span>}
+										{r === 'none' && <span className="text-[11.5px] text-fg-3">Ponles país para que salgan en su región</span>}
+									</div>
+									{!list.length ? (
+										<div className="rounded-xl border border-dashed border-line-strong px-4 py-5 text-[12.5px] text-fg-3">Ninguna PoC con estos filtros.</div>
+									) : view.mode === 'list' ? (
+										<PocTable pocs={list} today={today} sort={sort} onSort={setSort} />
+									) : (
+										<div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
+											{list.map((p) => (
+												<PocCard key={p.id} poc={p} today={today} />
+											))}
+										</div>
+									)}
+								</section>
+							);
+						})}
+						{hasFilters(filters) && !shown.length && (
+							<div className="rounded-xl border border-dashed border-line-strong px-4 py-6 text-center text-[12.5px] text-fg-3">
+								Ninguna PoC con estos filtros.{' '}
+								<button type="button" className="text-accent-text" onClick={() => setFilters(EMPTY_FILTERS)}>
+									Limpiar filtros
+								</button>
+							</div>
+						)}
 					</>
 				)}
 			</ViewBody>
 		</>
 	);
 }
+
+export const PocsView = () => <PocBoard closed={false} />;
+export const ClosedPocsView = () => <PocBoard closed />;
 
 export function NewPocDialog() {
 	const { newPocOpen, setNewPocOpen, go } = useUI();
