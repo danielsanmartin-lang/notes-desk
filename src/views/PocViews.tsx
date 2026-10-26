@@ -32,8 +32,9 @@ import type { Poc } from '../api/types';
 import { Chip, DueChip, EmptyState, PocDot, ProgressBar } from '../components/bits';
 import { StatTile } from '../components/charts';
 import { Composer } from '../components/Composer';
+import { CountryPicker } from '../components/CountryPicker';
 import { PocFilters, type PocViewMode } from '../components/PocFilters';
-import { Avatar, PocAdmins, pocDayLabel, PocFacts } from '../components/PocDetails';
+import { Avatar, OpenDays, PocAdmins, PocFacts } from '../components/PocDetails';
 import { DoneSection, TaskList } from '../components/TaskList';
 import { Timeline } from '../components/Timeline';
 import {
@@ -53,11 +54,14 @@ import {
 import { openExternal } from '../lib/bridge';
 import { cx, flagEmoji, money, plural } from '../lib/format';
 import {
+	countryName,
 	DEFAULT_DIR,
+	defaultCurrency,
 	EMPTY_FILTERS,
 	filterPocs,
 	formatAmount,
 	hasFilters,
+	openSince,
 	pocAmount,
 	region,
 	REGION_LABEL,
@@ -130,16 +134,14 @@ export function PocCard({ poc, today }: { poc: Poc; today: string }) {
 			</div>
 			<div className="mt-2 flex flex-wrap gap-1.5">
 				<StatusChip poc={poc} today={today} />
+				{poc.status !== 'won' && poc.status !== 'lost' && <OpenDays poc={poc} today={today} />}
 				{poc.hubspot_stage && <Chip tone="teal">HubSpot · {poc.hubspot_stage}</Chip>}
 				{poc.waiting > 0 && <Chip tone="warn">{poc.waiting} esperando</Chip>}
 			</div>
 			{(poc.start_date || poc.admin_count > 0) && (
 				<div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-fg-2">
 					{poc.start_date && (
-						<span>
-							Inicio {formatDay(poc.start_date, today)}
-							{poc.status === 'active' && <span className="text-fg-3"> · {pocDayLabel(poc.start_date, today)}</span>}
-						</span>
+						<span>Inicio {formatDay(poc.start_date, today)}</span>
 					)}
 					{poc.admin_count > 0 && <span>{plural(poc.admin_count, 'admin', 'admins')} del cliente</span>}
 				</div>
@@ -243,7 +245,7 @@ function PocTable({ pocs, today, sort, onSort }: { pocs: Poc[]; today: string; s
 						</span>
 						<span className="min-w-0 text-fg-2">
 							{p.start_date ? formatDay(p.start_date, today) : '—'}
-							{p.start_date && p.status === 'active' && <span className="block text-[11px] text-fg-3">{pocDayLabel(p.start_date, today)}</span>}
+							<span className="block text-[11px] text-fg-3">{openSince(p, today).label}</span>
 						</span>
 						<span className={cx('text-right font-semibold tabular-nums', !amount && 'font-normal text-fg-3')}>{formatAmount(amount) ?? '—'}</span>
 						<span className="text-fg-2">{p.hubspot_close_date ? formatDay(p.hubspot_close_date, today) : '—'}</span>
@@ -401,16 +403,24 @@ export function NewPocDialog() {
 	const { newPocOpen, setNewPocOpen, go } = useUI();
 	const a = useActions();
 	const { data: settings } = useSettings();
-	const empty = { name: '', company: '', country: '', owner: '', start_date: '', hubspot: '', use_template: true };
+	const empty = { name: '', company: '', country: '', owner: '', start_date: '', hubspot: '', amount: '', currency: 'EUR', use_template: true };
 	const [form, setForm] = useState(empty);
+	// La divisa sigue al país (EUR en Iberia, USD en LATAM) hasta que la cambias a mano.
+	const [currencyTouched, setCurrencyTouched] = useState(false);
 	const templateCount = (settings?.poc_template ?? '').split('\n').filter((l) => l.trim()).length;
 	const set = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm({ ...form, [k]: e.target.value });
 
 	const submit = async () => {
 		if (!form.name.trim()) return;
-		const poc = await a.createPoc({ ...form, use_template: form.use_template && templateCount > 0 });
+		const { amount, ...rest } = form;
+		const poc = await a.createPoc({
+			...rest,
+			...(amount.trim() ? { amount: amount as unknown as number } : {}),
+			use_template: form.use_template && templateCount > 0,
+		});
 		setNewPocOpen(false);
 		setForm(empty);
+		setCurrencyTouched(false);
 		go({ kind: 'poc', id: poc.id });
 	};
 
@@ -427,15 +437,50 @@ export function NewPocDialog() {
 					<span className="mb-1 block text-[12px] font-medium text-fg-2">Nombre</span>
 					<input autoFocus value={form.name} onChange={set('name')} placeholder="Cafam" className={inputClass} />
 				</label>
-				<div className="grid grid-cols-[1fr_90px] gap-2">
+				<div className="grid grid-cols-[1fr_190px] gap-2">
 					<label className="block">
 						<span className="mb-1 block text-[12px] font-medium text-fg-2">Empresa</span>
 						<input value={form.company} onChange={set('company')} placeholder="Caja de Compensación Familiar" className={inputClass} />
 					</label>
-					<label className="block">
+					<div>
 						<span className="mb-1 block text-[12px] font-medium text-fg-2">País</span>
-						<input value={form.country} onChange={set('country')} placeholder="CO" maxLength={2} className={cx(inputClass, 'uppercase')} />
+						<CountryPicker
+							value={form.country || null}
+							onChange={(code) =>
+								setForm({ ...form, country: code ?? '', currency: currencyTouched ? form.currency : defaultCurrency(code) })
+							}
+						/>
+					</div>
+				</div>
+				<div className="grid grid-cols-[1fr_190px] gap-2">
+					<label className="block">
+						<span className="mb-1 block text-[12px] font-medium text-fg-2">Importe (opcional)</span>
+						<input value={form.amount} onChange={set('amount')} inputMode="decimal" placeholder="20.000" className={inputClass} />
 					</label>
+					<div>
+						<span className="mb-1 block text-[12px] font-medium text-fg-2">Divisa</span>
+						<div className="flex h-8 gap-0.5 rounded-lg bg-hover p-0.5">
+							{[
+								{ value: 'EUR', label: '€ Euros' },
+								{ value: 'USD', label: 'US$ Dólares' },
+							].map((c) => (
+								<button
+									key={c.value}
+									type="button"
+									onClick={() => {
+										setForm({ ...form, currency: c.value });
+										setCurrencyTouched(true);
+									}}
+									className={cx(
+										'flex-1 rounded-md text-[12px] font-medium transition-colors',
+										form.currency === c.value ? 'bg-raised text-fg shadow-sm' : 'text-fg-3 hover:text-fg-2',
+									)}
+								>
+									{c.label}
+								</button>
+							))}
+						</div>
+					</div>
 				</div>
 				<div className="grid grid-cols-[1fr_150px] gap-2">
 					<label className="block">
@@ -684,7 +729,6 @@ export function PocView({ id }: { id: number }) {
 	const poc = data?.poc;
 	const name = useDraft(poc?.name, (v) => v && poc && a.updatePoc(poc.id, { name: v }));
 	const company = useDraft(poc?.company, (v) => poc && a.updatePoc(poc.id, { company: v }));
-	const country = useDraft(poc?.country, (v) => poc && a.updatePoc(poc.id, { country: v }));
 	const notes = useDraft(poc?.notes, (v) => poc && a.updatePoc(poc.id, { notes: v }));
 	const items = list?.items ?? [];
 	useListIds(items.map((i) => i.id));
@@ -734,6 +778,7 @@ export function PocView({ id }: { id: number }) {
 					/>
 					<div className="no-drag flex items-center gap-2">
 						<StatusChip poc={poc} today={today} />
+						<OpenDays poc={poc} today={today} />
 						<Popover open={pauseOpen} onOpenChange={setPauseOpen} align="end" trigger={<span />}>
 							<PauseForm poc={poc} onDone={() => setPauseOpen(false)} />
 						</Popover>
@@ -784,12 +829,27 @@ export function PocView({ id }: { id: number }) {
 					)}
 					<input {...company} placeholder="Empresa" className="no-drag h-6 min-w-16 rounded-md [field-sizing:content] bg-transparent px-1 text-[12.5px] text-fg-2 outline-none hover:bg-hover focus:bg-hover" />
 					<span className="text-fg-3">·</span>
-					<span>{flagEmoji(poc.country)}</span>
-					<input
-						{...country}
-						placeholder="País"
-						maxLength={2}
-						className="no-drag h-6 w-12 rounded-md bg-transparent px-1 text-[12.5px] text-fg-2 uppercase outline-none hover:bg-hover focus:bg-hover"
+					<CountryPicker
+						value={poc.country}
+						onChange={(code) =>
+							// Sin importe todavía, la divisa sigue al país; si ya hay importe, se respeta la que tenga.
+							a.updatePoc(poc.id, { country: code, ...(poc.amount == null ? { currency: defaultCurrency(code) } : {}) })
+						}
+						trigger={
+							<button
+								type="button"
+								className="no-drag flex h-6 items-center gap-1.5 rounded-md px-1 text-[12.5px] text-fg-2 hover:bg-hover"
+								title="Cambiar país"
+							>
+								{poc.country ? (
+									<>
+										{flagEmoji(poc.country)} {countryName(poc.country)}
+									</>
+								) : (
+									<span className="text-fg-3">Elegir país</span>
+								)}
+							</button>
+						}
 					/>
 				</div>
 			</header>

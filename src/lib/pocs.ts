@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { pocAmount as sharedPocAmount, regionOf, sumByCurrency } from '../../shared/pocs.js';
+import { daysBetween } from '../../shared/dates.js';
 import { fold } from '../../shared/quickparse.js';
 import type { Poc } from '../api/types';
 import { money } from './format';
@@ -9,6 +10,9 @@ import { money } from './format';
 export type Region = 'iberia' | 'latam' | 'none';
 
 export const region = (country: string | null): Region => regionOf(country);
+/** Divisa por defecto según el país: euros en Iberia, dólares en LATAM. */
+export const defaultCurrency = (country: string | null) => (region(country) === 'latam' ? 'USD' : 'EUR');
+
 export const REGION_LABEL: Record<Region, string> = { iberia: 'Iberia', latam: 'LATAM', none: 'Sin país' };
 export const REGIONS: Region[] = ['iberia', 'latam', 'none'];
 
@@ -36,6 +40,21 @@ export const formatAmount = (a: Amount | null) => (a ? money(a.value, a.currency
 /** "47.500 € · 5.000 US$": sin mezclar monedas. */
 export const formatSums = (sums: { currency: string; value: number }[]) => sums.map((x) => money(x.value, x.currency)).join(' · ') || null;
 export const totalsByCurrency = (pocs: Poc[]) => formatSums(sumByCurrency(pocs));
+
+/**
+ * Cuántos días lleva abierta: desde su fecha de inicio (o desde que se creó, si no tiene). Si aún no ha
+ * empezado, cuánto falta; si está concluida, cuánto duró.
+ */
+export function openSince(p: Pick<Poc, 'start_date' | 'created_at' | 'status' | 'closed_at'>, today: string) {
+	const start = p.start_date ?? p.created_at.slice(0, 10);
+	if ((p.status === 'won' || p.status === 'lost') && p.closed_at) {
+		const d = Math.max(0, daysBetween(start, p.closed_at.slice(0, 10)));
+		return { days: d, label: `${d} ${d === 1 ? 'día' : 'días'} de PoC`, future: false };
+	}
+	const d = daysBetween(start, today);
+	if (d < 0) return { days: null, label: d === -1 ? 'Empieza mañana' : `Empieza en ${-d} días`, future: true };
+	return { days: d, label: d === 0 ? 'Abierta hoy' : `${d} ${d === 1 ? 'día abierta' : 'días abierta'}`, future: false };
+}
 
 export type StatusFilter = 'all' | 'active' | 'paused' | 'won' | 'lost';
 

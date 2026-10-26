@@ -327,3 +327,9 @@ test('estadísticas por región y país', () => {
 	assert.equal(latam.pocs.active, 2);
 	assert.equal(simon.country, 'ES');
 });
+
+test('el país tiene que existir', () => {
+	assert.equal(repo.createPoc({ name: 'HSBC', country: 'mx' }).country, 'MX');
+	assert.throws(() => repo.createPoc({ name: 'Nada', country: 'XX' }), /No conozco el país/);
+	assert.throws(() => repo.createPoc({ name: 'Nada', country: 'Mexico' }), /No conozco el país/);
+});

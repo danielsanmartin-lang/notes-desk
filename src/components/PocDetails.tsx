@@ -1,25 +1,27 @@
 // Ficha de la PoC: owner, fecha de inicio y admins del cliente (los que usarán la plataforma).
 
-import { Banknote, CalendarDays, Copy, Mail, Plus, UserRound, Users, X } from 'lucide-react';
+import { Banknote, CalendarDays, Clock, Copy, Mail, Plus, UserRound, Users, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useState, type KeyboardEvent, type ReactNode } from 'react';
 import { toast } from 'sonner';
-import { daysBetween, formatDay } from '../../shared/dates.js';
+import { formatDay } from '../../shared/dates.js';
 import { useActions } from '../api/hooks';
 import type { Poc, PocAdmin } from '../api/types';
 import { openExternal } from '../lib/bridge';
 import { cx, initials, plural } from '../lib/format';
-import { formatAmount, pocAmount } from '../lib/pocs';
+import { formatAmount, openSince, pocAmount } from '../lib/pocs';
 import { Chip } from './bits';
 import { DatePicker } from './DatePicker';
 import { Button, IconButton, inputClass, SectionTitle, useDraft } from './ui';
 
-/** "Día 12" si ya empezó, "Empieza en 3 días" si no. */
-export function pocDayLabel(start: string | null, today: string) {
-	if (!start) return null;
-	const diff = daysBetween(start, today);
-	if (diff >= 0) return `Día ${diff + 1}`;
-	return diff === -1 ? 'Empieza mañana' : `Empieza en ${-diff} días`;
+/** Chip con los días que lleva abierta la PoC (o cuánto falta para que empiece). */
+export function OpenDays({ poc, today }: { poc: Poc; today: string }) {
+	const o = openSince(poc, today);
+	return (
+		<Chip tone={o.future ? 'neutral' : 'accent'} icon={<Clock />} title={poc.start_date ? 'Desde la fecha de inicio' : 'Desde que se creó (no tiene fecha de inicio)'}>
+			{o.label}
+		</Chip>
+	);
 }
 
 export function Avatar({ name, color, size = 26 }: { name: string; color?: string | null; size?: number }) {
@@ -53,7 +55,6 @@ export function PocFacts({ poc, adminCount, today }: { poc: Poc; adminCount: num
 	const manualAmount = useDraft(poc.amount == null ? '' : poc.amount.toLocaleString('es-ES'), (v) =>
 		a.updatePoc(poc.id, { amount: v as unknown as number, currency: poc.currency ?? 'EUR' }),
 	);
-	const day = pocDayLabel(poc.start_date, today);
 
 	return (
 		<div className="mb-4 grid grid-cols-4 gap-2.5">
@@ -75,10 +76,9 @@ export function PocFacts({ poc, adminCount, today }: { poc: Poc; adminCount: num
 					onChange={(v) => a.updatePoc(poc.id, { start_date: v })}
 					trigger={
 						<button type="button" className="flex h-6 w-full items-center gap-2 text-left">
-							<span className={cx('text-[13px]', poc.start_date ? 'font-medium' : 'text-fg-3')}>
+							<span className={cx('text-[13px] whitespace-nowrap', poc.start_date ? 'font-medium' : 'text-fg-3')}>
 								{poc.start_date ? formatDay(poc.start_date, today) : 'Sin fecha'}
 							</span>
-							{day && <Chip tone={day.startsWith('Día') ? 'accent' : 'neutral'}>{day}</Chip>}
 						</button>
 					}
 				/>

@@ -15,6 +15,7 @@ import {
 	weekRange,
 } from '../shared/dates.js';
 import { parseHubspotRef } from '../shared/hubspot.js';
+import { isCountry } from '../shared/countries.js';
 import { regionOf, sumByCurrency } from '../shared/pocs.js';
 
 export class HttpError extends Error {
@@ -625,7 +626,7 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 		}
 		if ('country' in data) {
 			const c = emptyToNull(data.country);
-			if (c && !/^[A-Za-z]{2}$/.test(c)) throw bad('El país va en dos letras (ES, CO, AR…)');
+			if (c && !isCountry(c)) throw bad(`No conozco el país «${c}». Elígelo de la lista (México es MX)`);
 			out.country = c ? c.toUpperCase() : null;
 		}
 		if ('color' in data) {
