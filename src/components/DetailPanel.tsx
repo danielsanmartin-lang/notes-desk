@@ -1,6 +1,8 @@
 import {
 	ArrowRight,
 	ChevronDown,
+	ChevronRight,
+	ListChecks,
 	Bell,
 	Building2,
 	CalendarDays,
@@ -29,7 +31,7 @@ import { openExternal } from '../lib/bridge';
 import { CATEGORY_LABEL, cx, daysWaiting, formatMoment, plural } from '../lib/format';
 import { useItemOps } from '../lib/ops';
 import { useUI } from '../lib/store';
-import { Checkbox, PocDot, WaitingChip } from './bits';
+import { Checkbox, DueChip, PocDot, WaitingChip } from './bits';
 import { DatePicker, ReminderPicker } from './DatePicker';
 import { ChannelPicker, ReplyForm, TouchForm } from './FollowupForms';
 import { Timeline } from './Timeline';
@@ -117,7 +119,9 @@ function DetailBody({
 	const [subText, setSubText] = useState('');
 
 	const done = item.state === 'done';
-	const followable = item.category === 'followup' || item.category === 'poc';
+	// Las subtareas siempre admiten toques: cada una lleva su propio contador.
+	const followable = item.category === 'followup' || item.category === 'poc' || !!item.parent_id;
+	const hasOpenSubs = subtasks.some((x) => x.state !== 'done');
 	const activePocs = pocs.filter((p) => p.status === 'active' || p.status === 'paused');
 	const pocCompany = pocs.find((p) => p.id === item.poc_id)?.company ?? null;
 
@@ -144,7 +148,7 @@ function DetailBody({
 				<button
 					type="button"
 					onClick={() => go(item.poc_id ? { kind: 'poc', id: item.poc_id } : item.category === 'followup' ? { kind: 'followups' } : { kind: 'tasks' })}
-					className="inline-flex h-6 items-center gap-1.5 rounded-md bg-hover px-2 text-[11.5px] font-medium text-fg-2 hover:text-fg"
+					className="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-md bg-hover px-2 text-[11.5px] font-medium whitespace-nowrap text-fg-2 hover:text-fg"
 				>
 					{item.poc_name ? (
 						<>
@@ -154,7 +158,16 @@ function DetailBody({
 						CATEGORY_LABEL[item.category]
 					)}
 				</button>
-				{item.parent_title && <span className="truncate text-[11.5px] text-fg-3">↳ {item.parent_title}</span>}
+				{item.parent_id && item.parent_title && (
+					<button
+						type="button"
+						onClick={() => select(item.parent_id)}
+						className="min-w-0 truncate rounded-md px-1 text-[11.5px] text-fg-3 hover:bg-hover hover:text-fg-2"
+						title="Ir a la tarea principal"
+					>
+						↳ {item.parent_title}
+					</button>
+				)}
 				<div className="ml-auto flex items-center gap-0.5">
 					<IconButton
 						label="Borrar (va a la papelera)"
@@ -216,7 +229,13 @@ function DetailBody({
 					/>
 				</div>
 
-				{followable && !done && (
+				{!done && hasOpenSubs && (
+					<div className="mt-4 flex items-start gap-2 rounded-xl bg-hover p-3 text-[12.5px] text-fg-2">
+						<ListChecks className="mt-0.5 size-3.5 shrink-0 text-fg-3" />
+						<span>El seguimiento va por subtarea: cada una tiene su fecha, sus toques y sus días esperando. Usa «Toque» en la subtarea o ábrela.</span>
+					</div>
+				)}
+				{followable && !done && !hasOpenSubs && (
 					<div
 						className={cx(
 							'mt-4 rounded-xl p-3',
@@ -387,7 +406,7 @@ function DetailBody({
 						</SectionTitle>
 						<div className="space-y-0.5">
 							{subtasks.map((s) => (
-								<SubtaskRow key={s.id} item={s} />
+								<SubtaskRow key={s.id} item={s} today={today} />
 							))}
 							<div className="flex h-8 items-center gap-2.5 px-1">
 								<Plus className="size-4 text-fg-3" />
@@ -487,19 +506,44 @@ function TypePicker({
 const fieldClass =
 	'h-7 w-full rounded-lg bg-transparent px-2 text-[12.5px] text-fg outline-none placeholder:text-fg-3 hover:bg-hover focus:bg-hover';
 
-function SubtaskRow({ item }: { item: Item }) {
+function SubtaskRow({ item, today }: { item: Item; today: string }) {
 	const a = useActions();
 	const ops = useItemOps();
+	const { select, setTouchOpen } = useUI();
 	const title = useDraft(item.title, (v) => v && a.update(item.id, { title: v }));
 	const done = item.state === 'done';
 	return (
-		<div className="group flex h-8 items-center gap-2.5 rounded-lg px-1 hover:bg-hover">
-			<Checkbox checked={done} size={16} onToggle={() => ops.toggle(item)} />
+		<div className="group flex min-h-8 items-center gap-2 rounded-lg px-1 hover:bg-hover">
+			<Checkbox checked={done} waiting={item.state === 'waiting'} size={16} onToggle={() => ops.toggle(item)} />
 			<input
 				{...title}
 				onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
-				className={cx('h-full min-w-0 flex-1 bg-transparent text-[13px] outline-none', done && 'text-fg-3 line-through')}
+				className={cx('h-8 min-w-0 flex-1 bg-transparent text-[13px] outline-none', done && 'text-fg-3 line-through')}
 			/>
+			{!done && item.state === 'waiting' && <WaitingChip item={item} today={today} />}
+			{!done && item.due_date && <DueChip date={item.due_date} today={today} />}
+			{!done && (
+				<button
+					type="button"
+					onClick={() => {
+						select(item.id);
+						setTouchOpen(true);
+					}}
+					className="hidden h-6 items-center gap-1 rounded-md px-1.5 text-[11.5px] font-medium text-accent-text group-hover:inline-flex hover:bg-accent-soft"
+					title="Registrar toque en esta subtarea"
+				>
+					<Send className="size-3" /> Toque
+				</button>
+			)}
+			<button
+				type="button"
+				onClick={() => select(item.id)}
+				aria-label="Abrir subtarea"
+				title="Abrir subtarea (fecha, toques, bitácora)"
+				className="hidden size-6 items-center justify-center rounded-md text-fg-3 group-hover:flex hover:bg-hover hover:text-fg"
+			>
+				<ChevronRight className="size-3.5" />
+			</button>
 			<button
 				type="button"
 				onClick={() => ops.remove(item)}

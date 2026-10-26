@@ -66,9 +66,12 @@ const VISIBLE = `i.deleted_at IS NULL AND (par.id IS NULL OR (par.deleted_at IS 
 // Las tareas de una PoC pausada, ganada o perdida desaparecen de Hoy y de Próximos.
 const ACTIVE_POC = `(p.id IS NULL OR p.status = 'active')`;
 const OPEN = `i.state <> 'done'`;
+// Una tarea con subtareas abiertas cede su contador (fecha, espera, toques) a cada subtarea: en Hoy y
+// Próximos salen las subtareas, no la tarea madre.
+const HAS_OPEN_SUBS = `EXISTS (SELECT 1 FROM items s WHERE s.parent_id = i.id AND s.deleted_at IS NULL AND s.state <> 'done')`;
 const TODAY_COND = `${VISIBLE} AND ${ACTIVE_POC} AND ${OPEN}
-	AND ((i.due_date IS NOT NULL AND i.due_date <= @today) OR (i.flagged = 1 AND i.parent_id IS NULL))`;
-const UPCOMING_COND = `${VISIBLE} AND ${ACTIVE_POC} AND ${OPEN} AND i.due_date > @today AND i.due_date <= @horizon`;
+	AND ((i.due_date IS NOT NULL AND i.due_date <= @today AND NOT ${HAS_OPEN_SUBS}) OR (i.flagged = 1 AND i.parent_id IS NULL))`;
+const UPCOMING_COND = `${VISIBLE} AND ${ACTIVE_POC} AND ${OPEN} AND i.due_date > @today AND i.due_date <= @horizon AND NOT ${HAS_OPEN_SUBS}`;
 const FOLLOWUPS_COND = `${VISIBLE} AND ${OPEN} AND i.parent_id IS NULL
 	AND (i.category = 'followup' OR (@includePoc = 1 AND i.category = 'poc' AND i.state = 'waiting' AND ${ACTIVE_POC}))`;
 const TASKS_COND = `${VISIBLE} AND ${OPEN} AND i.parent_id IS NULL AND i.category = 'task'`;
@@ -491,9 +494,19 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 		db.transaction(() => ids.forEach((id, i) => stmt.run({ s: i + 1, id: Number(id) })))();
 	}
 
+	/** Añade a cada tarea sus subtareas (`subs`), para enseñarlas debajo con su propio contador. */
+	function withSubs(rows) {
+		const ids = rows.filter((r) => r.sub_total > 0).map((r) => r.id);
+		if (!ids.length) return rows;
+		const subs = all(
+			`${ITEM_SELECT} WHERE i.parent_id IN (${ids.join(',')}) AND i.deleted_at IS NULL ORDER BY (i.state = 'done'), i.sort_order, i.id`,
+		).map(itemOut);
+		return rows.map((r) => (r.sub_total > 0 ? { ...r, subs: subs.filter((s) => s.parent_id === r.id) } : r));
+	}
+
 	function listItems(view, { pocId, includePoc = false } = {}) {
 		const p = { today: today(), horizon: addDays(today(), 7), week: weekStart(), includePoc: includePoc ? 1 : 0 };
-		const q = (where, order) => all(`${ITEM_SELECT} WHERE ${where} ORDER BY ${order}`, p).map(itemOut);
+		const q = (where, order) => withSubs(all(`${ITEM_SELECT} WHERE ${where} ORDER BY ${order}`, p).map(itemOut));
 		// Lo completado esta semana se queda visible (tachado) al final de la lista.
 		const doneThisWeek = (category) =>
 			q(
@@ -967,11 +980,13 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 		if (!summary) throw notFound('La cuenta');
 		const p = { key, since: addDays(today(), -30) };
 		const cond = `fold(${ACCOUNT_EXPR}) = @key`;
-		const open = all(
-			`${ITEM_SELECT} WHERE ${VISIBLE} AND i.parent_id IS NULL AND ${OPEN} AND ${cond}
-			 ORDER BY (i.due_date IS NULL), i.due_date, i.sort_order, i.id`,
-			p,
-		).map(itemOut);
+		const open = withSubs(
+			all(
+				`${ITEM_SELECT} WHERE ${VISIBLE} AND i.parent_id IS NULL AND ${OPEN} AND ${cond}
+				 ORDER BY (i.due_date IS NULL), i.due_date, i.sort_order, i.id`,
+				p,
+			).map(itemOut),
+		);
 		const done = all(
 			`${ITEM_SELECT} WHERE i.deleted_at IS NULL AND i.parent_id IS NULL AND i.state = 'done' AND i.completed_at >= @since AND ${cond}
 			 ORDER BY i.completed_at DESC`,
@@ -1076,7 +1091,7 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 
 		const itemsFrom = `FROM items i LEFT JOIN pocs p ON p.id = i.poc_id LEFT JOIN items par ON par.id = i.parent_id`;
 		const waitingNow = all(
-			`SELECT i.waiting_since ${itemsFrom} WHERE ${VISIBLE} AND i.state = 'waiting' AND i.parent_id IS NULL AND ${ACTIVE_POC} ${IRF}`,
+			`SELECT i.waiting_since ${itemsFrom} WHERE ${VISIBLE} AND i.state = 'waiting' AND NOT ${HAS_OPEN_SUBS} AND ${ACTIVE_POC} ${IRF}`,
 			P,
 		);
 		const buckets = [
@@ -1186,7 +1201,7 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 				avg_days: avgResponseDays(periodReplies),
 			},
 			now: {
-				mine: get(`SELECT COUNT(*) AS n ${itemsFrom} WHERE ${VISIBLE} AND ${ACTIVE_POC} AND i.state = 'todo' AND i.parent_id IS NULL ${IRF}`, P).n,
+				mine: get(`SELECT COUNT(*) AS n ${itemsFrom} WHERE ${VISIBLE} AND ${ACTIVE_POC} AND i.state = 'todo' AND NOT ${HAS_OPEN_SUBS} ${IRF}`, P).n,
 				waiting: waitingNow.length,
 				overdue: get(`SELECT COUNT(*) AS n ${itemsFrom} WHERE ${VISIBLE} AND ${ACTIVE_POC} AND ${OPEN} AND i.due_date < @today ${IRF}`, P).n,
 			},

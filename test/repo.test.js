@@ -350,3 +350,25 @@ test('partner y tipos de contacto de la PoC', () => {
 	const account = repo.getAccount('global bank');
 	assert.equal(account.contacts.find((c) => c.name === 'Angel').kind, 'partner');
 });
+
+test('con subtareas abiertas, el contador pasa de la tarea a cada subtarea', () => {
+	const parent = repo.createItem({ category: 'task', title: 'Revisar los 3 deals de LATAM', due_date: '2026-10-26' });
+	assert.deepEqual(repo.listItems('today').items.map((i) => i.title), ['Revisar los 3 deals de LATAM']);
+
+	const cafam = repo.createItem({ parent_id: parent.id, title: 'Cafam', due_date: '2026-10-26' });
+	const sonda = repo.createItem({ parent_id: parent.id, title: 'Sonda' });
+	repo.touchItem(sonda.id, { channel: 'email', next_date: '2026-10-28' });
+
+	// En Hoy sale la subtarea con fecha, no la madre.
+	assert.deepEqual(repo.listItems('today').items.map((i) => i.title), ['Cafam']);
+	assert.deepEqual(repo.listItems('upcoming').items.map((i) => i.title), ['Sonda']);
+	// En Tareas, la madre lleva sus subtareas con su propio estado.
+	const row = repo.listItems('tasks').items.find((i) => i.id === parent.id);
+	assert.deepEqual(row.subs.map((s) => [s.title, s.state]), [['Cafam', 'todo'], ['Sonda', 'waiting']]);
+	assert.equal(repo.stats(4).now.waiting, 1, 'cuenta la subtarea en espera');
+
+	// Completadas todas las subtareas, la madre recupera su contador.
+	repo.completeItem(cafam.id);
+	repo.completeItem(sonda.id);
+	assert.deepEqual(repo.listItems('today').items.map((i) => i.title), ['Revisar los 3 deals de LATAM']);
+});

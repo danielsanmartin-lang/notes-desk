@@ -21,7 +21,7 @@ export function TodayView() {
 	const flagged = items.filter((i) => !chase.includes(i) && !overdue.includes(i) && !now.includes(i));
 	const undated = data?.undated ?? [];
 	useListIds([...chase, ...overdue, ...now, ...flagged, ...undated].map((i) => i.id));
-	const opts = { showPoc: true, showCategory: true, sortable: false, listKey: 'today' };
+	const opts = { showPoc: true, showCategory: true, sortable: false, listKey: 'today', nested: false };
 
 	return (
 		<>
@@ -82,7 +82,7 @@ export function UpcomingView() {
 	const items = data?.items ?? [];
 	useListIds(items.map((i) => i.id));
 	const days = Array.from({ length: 7 }, (_, n) => addDays(today, n + 1));
-	const opts = { showPoc: true, showCategory: true, sortable: false, listKey: 'upcoming' };
+	const opts = { showPoc: true, showCategory: true, sortable: false, listKey: 'upcoming', nested: false };
 
 	return (
 		<>
@@ -109,13 +109,20 @@ export function UpcomingView() {
 	);
 }
 
+/** Con subtareas abiertas, una tarea está «esperando» solo si todas sus subtareas lo están. */
+function effectiveState(i: Item) {
+	const open = (i.subs ?? []).filter((x) => x.state !== 'done');
+	if (!open.length) return i.state;
+	return open.every((x) => x.state === 'waiting') ? 'waiting' : 'todo';
+}
+
 export function FollowUpsView() {
 	const today = useToday();
 	const [includePoc, setIncludePoc] = useState(false);
 	const { data, isLoading } = useItems('followups', { includePoc });
 	const items = data?.items ?? [];
-	const mine = items.filter((i) => i.state === 'todo');
-	const waiting = items.filter((i) => i.state === 'waiting');
+	const mine = items.filter((i) => effectiveState(i) === 'todo');
+	const waiting = items.filter((i) => effectiveState(i) === 'waiting');
 	useListIds([...mine, ...waiting].map((i) => i.id));
 	const opts = { showPoc: true, sortable: false, listKey: 'followups' };
 	const due = items.filter((i) => i.due_date && i.due_date <= today).length;
