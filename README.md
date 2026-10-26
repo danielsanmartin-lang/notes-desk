@@ -1,8 +1,7 @@
 # Zepo Desk
 
-Seguimiento de lo que tengo que hacer en Zepo: **follow-ups**, **tareas pendientes** y las tareas de cada
-**PoC en curso**. Sustituye al Google Doc de "Tareas W42, W43, W44…": lo pendiente está siempre a la
-vista y lo hecho se archiva solo por semanas.
+Seguimiento de las tareas en Zepo: **follow-ups**, **tareas pendientes** y las tareas de cada
+**PoC en curso**.
 
 Se usa como app de escritorio (`/Applications/Zepo Desk.app`). Todo se guarda en una base de datos
 SQLite local.
