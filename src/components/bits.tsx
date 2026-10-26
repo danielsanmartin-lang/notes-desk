@@ -164,11 +164,37 @@ export const PocTag = ({ name, color }: { name: string; color: string | null }) 
 	</Chip>
 );
 
-export const WhoChip = ({ company, contact }: { company: string | null; contact: string | null }) =>
+export const WhoChip = ({
+	company,
+	contact,
+	onCompany,
+	companyTitle,
+}: {
+	company: string | null;
+	contact: string | null;
+	/** Si se pasa, el nombre de la empresa es un enlace (a HubSpot o a la cuenta). */
+	onCompany?: () => void;
+	companyTitle?: string;
+}) =>
 	company || contact ? (
 		<span className="inline-flex min-w-0 items-center gap-1 text-[11.5px] text-fg-3">
 			{company ? <Building2 className="size-3 shrink-0" /> : <User className="size-3 shrink-0" />}
-			<span className="truncate">{[company, contact].filter(Boolean).join(' · ')}</span>
+			{company && onCompany ? (
+				<button
+					type="button"
+					title={companyTitle}
+					onClick={(e) => {
+						e.stopPropagation();
+						onCompany();
+					}}
+					className="truncate rounded-sm hover:text-accent-text hover:underline"
+				>
+					{company}
+				</button>
+			) : (
+				company && <span className="truncate">{company}</span>
+			)}
+			{contact && <span className="truncate">{company ? `· ${contact}` : contact}</span>}
 		</span>
 	) : null;
 

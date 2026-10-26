@@ -5,6 +5,7 @@ import { motion } from 'motion/react';
 import { useState } from 'react';
 import { useActions } from '../api/hooks';
 import type { Item } from '../api/types';
+import { openExternal } from '../lib/bridge';
 import { cx, plural } from '../lib/format';
 import { useItemOps } from '../lib/ops';
 import { useUI } from '../lib/store';
@@ -25,6 +26,7 @@ export interface RowOptions {
 export function TaskRow({ item, today, options = {} }: { item: Item; today: string; options?: RowOptions }) {
 	const selected = useUI((s) => s.selectedId === item.id);
 	const select = useUI((s) => s.select);
+	const go = useUI((s) => s.go);
 	const setTouchOpen = useUI((s) => s.setTouchOpen);
 	const ops = useItemOps();
 	const a = useActions();
@@ -113,7 +115,14 @@ export function TaskRow({ item, today, options = {} }: { item: Item; today: stri
 						)}
 						{options.showCategory && item.category === 'followup' && <Chip tone="neutral">Follow-up</Chip>}
 						{options.showPoc && item.poc_name && !pocPrefix && <PocTag name={item.poc_name} color={item.poc_color} />}
-						<WhoChip company={item.company} contact={item.contact} />
+						<WhoChip
+							company={item.company}
+							contact={item.contact}
+							onCompany={() =>
+								item.account_hubspot_url ? openExternal(item.account_hubspot_url) : item.company && go({ kind: 'account', name: item.company })
+							}
+							companyTitle={item.account_hubspot_url ? `Abrir ${item.company} en HubSpot` : `Ver la cuenta ${item.company} (sin enlace de HubSpot: añádelo en Cuentas)`}
+						/>
 						{item.channel && (
 							<span className="text-fg-3" title="Canal">
 								<ChannelIcon channel={item.channel} className="size-3" />

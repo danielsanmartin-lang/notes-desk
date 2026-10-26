@@ -53,7 +53,7 @@ export function CommandPalette() {
 		{ id: 'new-fup', label: 'Nuevo follow-up', icon: <Plus />, run: create({ kind: 'followups' }) },
 		{ id: 'new-task', label: 'Nueva tarea', icon: <Plus />, hint: '⌘N', run: create({ kind: 'tasks' }) },
 		{ id: 'new-poc', label: 'Nueva PoC', icon: <Plus />, run: () => setNewPocOpen(true) },
-		{ id: 'go-today', label: 'Ir a Hoy', icon: <Sun />, hint: '⌘1', run: nav({ kind: 'today' }) },
+		{ id: 'go-today', label: 'Ir a Inicio', icon: <Sun />, hint: '⌘1', run: nav({ kind: 'today' }) },
 		{ id: 'go-upcoming', label: 'Ir a Próximos 7 días', icon: <CalendarDays />, hint: '⌘2', run: nav({ kind: 'upcoming' }) },
 		{ id: 'go-fup', label: 'Ir a Follow-ups', icon: <Send />, hint: '⌘3', run: nav({ kind: 'followups' }) },
 		{ id: 'go-tasks', label: 'Ir a Tareas pendientes', icon: <SquareCheckBig />, hint: '⌘4', run: nav({ kind: 'tasks' }) },

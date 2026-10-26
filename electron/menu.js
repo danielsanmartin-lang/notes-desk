@@ -42,7 +42,7 @@ export function buildMenu({ dev, navigate, quickCapture }) {
 		{
 			label: 'Visualización',
 			submenu: [
-				{ label: 'Hoy', accelerator: 'Cmd+1', click: () => navigate('today') },
+				{ label: 'Inicio', accelerator: 'Cmd+1', click: () => navigate('today') },
 				{ type: 'separator' },
 				...(dev ? [{ role: 'reload', label: 'Recargar' }, { role: 'toggleDevTools', label: 'Herramientas de desarrollo' }, { type: 'separator' }] : []),
 				{ role: 'resetZoom', label: 'Tamaño real' },

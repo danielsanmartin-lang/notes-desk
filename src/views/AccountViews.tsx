@@ -1,18 +1,18 @@
 // Vista por cuenta: cada empresa con todo lo suyo (follow-ups, tareas, PoCs, contactos e historial).
 // Las cuentas no se dan de alta: salen de la empresa de cada tarea y de cada PoC.
 
-import { Building2, ChevronRight, Hand, Hourglass, Mail, Search, Send, Timer } from 'lucide-react';
+import { Building2, ChevronRight, ExternalLink, Hand, Hourglass, Link2, Mail, Search, Send, Timer } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import { daysBetween, formatDay } from '../../shared/dates.js';
 import { fold } from '../../shared/quickparse.js';
-import { useAccount, useAccounts, useToday } from '../api/hooks';
+import { useAccount, useAccounts, useActions, useToday } from '../api/hooks';
 import type { AccountSummary } from '../api/types';
 import { Chip, EmptyState, PocDot } from '../components/bits';
 import { Composer } from '../components/Composer';
 import { Avatar } from '../components/PocDetails';
 import { DoneSection, Group, TaskList } from '../components/TaskList';
 import { Timeline } from '../components/Timeline';
-import { inputClass, SectionTitle } from '../components/ui';
+import { Button, IconButton, inputClass, Popover, SectionTitle } from '../components/ui';
 import { openExternal } from '../lib/bridge';
 import { cx, plural } from '../lib/format';
 import { useUI } from '../lib/store';
@@ -73,6 +73,20 @@ function AccountRow({ account, today }: { account: AccountSummary; today: string
 				{account.next_due && <span className="text-fg-2">Próximo: {formatDay(account.next_due, today)}</span>}
 				<span className="text-fg-3">{idleText(account.last_activity_at, today)}</span>
 			</div>
+			{account.hubspot_url && (
+				<span
+					role="link"
+					tabIndex={0}
+					onClick={(e) => {
+						e.stopPropagation();
+						openExternal(account.hubspot_url!);
+					}}
+					title={`Abrir ${account.name} en HubSpot`}
+					className="flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-[11px] font-medium text-teal hover:bg-teal-soft"
+				>
+					<ExternalLink className="size-3" /> HubSpot
+				</span>
+			)}
 			<ChevronRight className="size-4 shrink-0 text-fg-3 opacity-0 transition-opacity group-hover:opacity-100" />
 		</button>
 	);
@@ -145,6 +159,70 @@ function Tile({ icon, label, value, hint }: { icon: ReactNode; label: string; va
 	);
 }
 
+/** Enlace de la cuenta a su empresa en HubSpot: abrirlo, cambiarlo o pegarlo por primera vez. */
+function AccountHubspot({ name, url }: { name: string; url: string | null }) {
+	const a = useActions();
+	const [open, setOpen] = useState(false);
+	const [value, setValue] = useState('');
+	const save = async (v: string | null) => {
+		await a.setAccountHubspot(name, v);
+		setOpen(false);
+		setValue('');
+	};
+	const editor = (
+		<div className="w-80">
+			<div className="mb-2 text-[13px] font-semibold">Empresa en HubSpot</div>
+			<input
+				autoFocus
+				value={value}
+				onChange={(e) => setValue(e.target.value)}
+				onKeyDown={(e) => e.key === 'Enter' && value.trim() && save(value)}
+				placeholder="Pega el enlace de la empresa o su ID"
+				className={inputClass}
+			/>
+			<div className="mt-3 flex justify-between gap-2">
+				{url ? (
+					<Button variant="ghost" size="sm" onClick={() => save(null)}>
+						Quitar enlace
+					</Button>
+				) : (
+					<span />
+				)}
+				<Button variant="primary" size="sm" disabled={!value.trim()} onClick={() => save(value)}>
+					Guardar
+				</Button>
+			</div>
+		</div>
+	);
+	return (
+		<div className="flex items-center gap-1.5">
+			{url && (
+				<Button size="sm" icon={<ExternalLink className="size-3.5" />} onClick={() => openExternal(url)}>
+					Abrir en HubSpot
+				</Button>
+			)}
+			<Popover
+				open={open}
+				onOpenChange={setOpen}
+				align="end"
+				trigger={
+					url ? (
+						<IconButton label="Cambiar el enlace de HubSpot">
+							<Link2 className="size-3.5" />
+						</IconButton>
+					) : (
+						<Button size="sm" icon={<Link2 className="size-3.5" />}>
+							Enlazar con HubSpot
+						</Button>
+					)
+				}
+			>
+				{editor}
+			</Popover>
+		</div>
+	);
+}
+
 export function AccountView({ name }: { name: string }) {
 	const today = useToday();
 	const { data, isError } = useAccount(name);
@@ -170,6 +248,7 @@ export function AccountView({ name }: { name: string }) {
 				icon={<Avatar name={data.name} color={accountColor(data.name)} size={32} />}
 				title={data.name}
 				subtitle={idleText(data.last_activity_at, today)}
+				right={<AccountHubspot name={data.name} url={data.hubspot_url} />}
 			/>
 			<ViewBody>
 				<div className="mb-5 grid grid-cols-4 gap-2.5">

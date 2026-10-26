@@ -14,7 +14,7 @@ import {
 	toDateTimeStr,
 	weekRange,
 } from '../shared/dates.js';
-import { parseHubspotRef } from '../shared/hubspot.js';
+import { companyUrl, parseHubspotCompanyRef, parseHubspotRef } from '../shared/hubspot.js';
 import { isCountry } from '../shared/countries.js';
 import { regionOf, sumByCurrency } from '../shared/pocs.js';
 
@@ -55,6 +55,8 @@ const PREV_FIELDS = ['state', 'due_date', 'waiting_since', 'touch_count', 'last_
 const ITEM_SELECT = `
 	SELECT i.*, p.name AS poc_name, p.color AS poc_color, p.status AS poc_status,
 	       par.title AS parent_title,
+	       (SELECT acc.hubspot_url FROM accounts acc
+	         WHERE acc.key = trim(fold(coalesce(nullif(i.company, ''), p.company)))) AS account_hubspot_url,
 	       (SELECT COUNT(*) FROM items s WHERE s.parent_id = i.id AND s.deleted_at IS NULL) AS sub_total,
 	       (SELECT COUNT(*) FROM items s WHERE s.parent_id = i.id AND s.deleted_at IS NULL AND s.state = 'done') AS sub_done
 	FROM items i
@@ -933,6 +935,8 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 					pocs: [],
 					last_activity_at: null,
 					touches_30d: 0,
+					hubspot_company_id: null,
+					hubspot_url: null,
 				});
 			}
 			return acc.get(key);
@@ -967,6 +971,10 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 			const e = entry(r.k.trim());
 			e.last_activity_at = r.last;
 			e.touches_30d = r.touches;
+		}
+		for (const r of all('SELECT key, hubspot_company_id, hubspot_url FROM accounts')) {
+			const e = acc.get(r.key);
+			if (e) Object.assign(e, { hubspot_company_id: r.hubspot_company_id, hubspot_url: r.hubspot_url });
 		}
 		const open = (e) => e.followups + e.waiting + e.tasks + e.poc_items;
 		return [...acc.values()].sort(
@@ -1031,6 +1039,29 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 				avg_response_days: avgResponseDays(replies),
 			},
 		};
+	}
+
+	/** Enlaza (o desenlaza, con valor vacío) una cuenta con su empresa en HubSpot. */
+	function setAccountHubspot(name, input) {
+		const key = fold(name).trim();
+		const summary = listAccounts().find((x) => x.key === key);
+		if (!summary) throw notFound('La cuenta');
+		const raw = emptyToNull(input);
+		if (!raw) {
+			run('DELETE FROM accounts WHERE key = @key', { key });
+			return { ...summary, hubspot_company_id: null, hubspot_url: null };
+		}
+		const ref = parseHubspotCompanyRef(raw);
+		if (!ref) throw bad('No reconozco ese enlace. Pega el enlace de la empresa en HubSpot o su ID');
+		if (ref.portalId && !getSettings().hubspot_portal_id) setSettings({ hubspot_portal_id: ref.portalId });
+		const url = ref.url ?? companyUrl(getSettings().hubspot_portal_id, ref.companyId);
+		run(
+			`INSERT INTO accounts (key, name, hubspot_company_id, hubspot_url, updated_at) VALUES (@key, @name, @id, @url, @t)
+			 ON CONFLICT (key) DO UPDATE SET name = excluded.name, hubspot_company_id = excluded.hubspot_company_id,
+			   hubspot_url = excluded.hubspot_url, updated_at = excluded.updated_at`,
+			{ key, name: summary.name, id: ref.companyId, url, t: ts() },
+		);
+		return { ...summary, hubspot_company_id: ref.companyId, hubspot_url: url };
 	}
 
 	// ── Estadísticas ───────────────────────────────────────────────────────────
@@ -1273,6 +1304,7 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 		deletePocAdmin,
 		listAccounts,
 		getAccount,
+		setAccountHubspot,
 		stats,
 		applyHubspotDeal,
 		listWeeks,

@@ -28,7 +28,7 @@ export function TodayView() {
 			<ViewHeader
 				icon={<Sun />}
 				iconClass="bg-warn-soft text-warn"
-				title="Hoy"
+				title="Inicio"
 				subtitle={capFirst(longDate(today))}
 			/>
 			<ViewBody>

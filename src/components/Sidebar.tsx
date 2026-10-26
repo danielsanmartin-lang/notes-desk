@@ -126,7 +126,7 @@ export function Sidebar() {
 					view={{ kind: 'today' }}
 					icon={<Sun />}
 					iconClass="text-warn"
-					label="Hoy"
+					label="Inicio"
 					count={c?.today}
 					countTone={c?.overdue ? 'danger' : 'accent'}
 				/>

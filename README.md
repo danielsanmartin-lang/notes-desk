@@ -8,7 +8,7 @@ SQLite local.
 
 ## Cómo se usa
 
-- **Hoy**: lo que vence hoy o antes, los follow-ups que toca volver a perseguir, lo destacado (★) y,
+- **Inicio** (antes «Hoy»): lo que vence hoy o antes, los follow-ups que toca volver a perseguir, lo destacado (★) y,
   en un grupo aparte, todo lo que no tiene fecha y te toca a ti (también las tareas de las PoCs
   activas, con el nombre de su PoC). El número de la barra lateral, del Dock y de la barra de menús
   cuenta solo lo que vence, no lo que no tiene fecha.
@@ -29,7 +29,8 @@ SQLite local.
   checklist, notas, historial, el enlace al deal y **Pausar hasta…** (sus tareas desaparecen de Hoy y
   vuelven solas cuando termina la pausa). Al crearla se puede partir de una plantilla de checklist.
 - **Cuentas**: salen solas de la empresa de cada tarea y de cada PoC (sin distinguir mayúsculas ni
-  acentos). Cada cuenta reúne lo que te toca, lo que espera respuesta, sus PoCs, los contactos
+  acentos). Cada cuenta puede enlazarse con su empresa de HubSpot (botón «Enlazar con HubSpot»
+  en su página); entonces, en cualquier tarea, pulsar el nombre de la empresa abre esa ficha de HubSpot. Cada cuenta reúne lo que te toca, lo que espera respuesta, sus PoCs, los contactos
   (incluidos los admins de sus PoCs), lo completado en 30 días y su historial.
 - **Estadísticas** (filtrables por Todas / Iberia / LATAM): completadas, toques y respuestas por semana (con el periodo anterior), tasa y
   tiempo medio de respuesta, follow-ups esperando según antigüedad, toques por canal, cuentas con

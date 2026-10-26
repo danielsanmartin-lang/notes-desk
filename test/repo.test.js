@@ -372,3 +372,16 @@ test('con subtareas abiertas, el contador pasa de la tarea a cada subtarea', () 
 	repo.completeItem(sonda.id);
 	assert.deepEqual(repo.listItems('today').items.map((i) => i.title), ['Revisar los 3 deals de LATAM']);
 });
+
+test('enlace de HubSpot de una cuenta, visible en sus tareas', () => {
+	repo.setSettings({ hubspot_portal_id: '144272575' });
+	const t = repo.createItem({ category: 'followup', title: 'FUP', company: 'BCI' });
+	const acc = repo.setAccountHubspot('bci', '402201184484');
+	assert.equal(acc.hubspot_url, 'https://app.hubspot.com/contacts/144272575/record/0-2/402201184484');
+	assert.equal(repo.listAccounts().find((a) => a.name === 'BCI').hubspot_company_id, '402201184484');
+	assert.equal(repo.getItem(t.id).item.account_hubspot_url, acc.hubspot_url);
+	assert.equal(repo.setAccountHubspot('BCI', 'https://app.hubspot.com/contacts/144272575/record/0-2/9/').hubspot_company_id, '9');
+	assert.throws(() => repo.setAccountHubspot('BCI', 'https://google.com'), /No reconozco/);
+	assert.equal(repo.setAccountHubspot('BCI', '').hubspot_url, null);
+	assert.throws(() => repo.setAccountHubspot('Nadie', '1'), /no existe/);
+});

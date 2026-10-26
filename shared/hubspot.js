@@ -27,5 +27,19 @@ export function parseHubspotRef(input) {
 	return { dealId: deal[1], url: s, portalId: portal ? portal[1] : null };
 }
 
+/** ID de empresa o enlace de HubSpot (…/record/0-2/123, …/company/123) → { companyId, url, portalId }. */
+export function parseHubspotCompanyRef(input) {
+	const s = String(input ?? '').trim();
+	if (!s) return null;
+	if (/^\d+$/.test(s)) return { companyId: s, url: null, portalId: null };
+	const m = s.match(/\/(?:record\/0-2|company)\/(\d+)/);
+	if (!m) return null;
+	const portal = s.match(/hubspot\.com\/[a-z-]+\/(\d+)\//);
+	return { companyId: m[1], url: s, portalId: portal ? portal[1] : null };
+}
+
+export const companyUrl = (portalId, companyId) =>
+	portalId && companyId ? `https://app.hubspot.com/contacts/${portalId}/record/0-2/${companyId}` : null;
+
 export const dealUrl = (portalId, dealId) =>
 	portalId && dealId ? `https://app.hubspot.com/contacts/${portalId}/record/0-3/${dealId}` : null;

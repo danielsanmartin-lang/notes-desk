@@ -126,6 +126,8 @@ export function useActions() {
 				run(api<PocAdmin>(`/poc-admins/${id}`, { method: 'PATCH', body: data })),
 			deleteAdmin: (id: number) => run(api(`/poc-admins/${id}`, { method: 'DELETE' })),
 			syncHubspot: (id: number) => post<Poc>(`/pocs/${id}/hubspot/sync`),
+			setAccountHubspot: (name: string, hubspot: string | null) =>
+				run(api(`/accounts/${encodeURIComponent(name)}/hubspot`, { method: 'PUT', body: { hubspot } })),
 			saveSettings: (patch: Partial<Settings>) => run(api<Settings>('/settings', { method: 'PATCH', body: patch })),
 		};
 	}, [qc]);
