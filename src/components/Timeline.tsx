@@ -20,10 +20,10 @@ import { ChannelIcon } from './bits';
 
 const DELETABLE = new Set(['note', 'touch', 'reply']);
 
-function describe(a: Activity, today: string): { icon: ReactNode; title: string; tone: string } {
+function describe(a: Activity, today: string, inPoc?: boolean): { icon: ReactNode; title: string; tone: string } {
 	switch (a.kind) {
 		case 'created':
-			return { icon: <Sparkles />, title: a.poc_id && !a.item_id ? 'PoC creada' : 'Creada', tone: 'text-fg-3' };
+			return { icon: <Sparkles />, title: a.poc_id && !a.item_id ? 'PoC creada' : inPoc ? 'Tarea añadida' : 'Creada', tone: 'text-fg-3' };
 		case 'touch':
 			return {
 				icon: a.channel ? <ChannelIcon channel={a.channel} className="size-3.5" /> : <Send />,
@@ -79,7 +79,7 @@ export function Timeline({
 		<ol className="relative">
 			<AnimatePresence initial={false}>
 				{entries.map((a, i) => {
-					const d = describe(a, today);
+					const d = describe(a, today, showItem);
 					const sub = parentId != null && a.item_id !== parentId;
 					const context = (showItem || sub) && (a.item_title ?? a.poc_name) ? (a.item_title ?? a.poc_name) : null;
 					return (

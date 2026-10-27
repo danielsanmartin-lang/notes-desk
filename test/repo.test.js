@@ -418,3 +418,17 @@ test('buscador del Inicio: título, notas, PoC e historial, sin acentos ni mayú
 	assert.equal(repo.searchItems('catalina primax').items.length, 0);
 	assert.deepEqual(repo.searchItems('  '), { items: [], done: [] });
 });
+
+test('el historial de la PoC incluye sus tareas desde que se añaden (no las de la papelera)', () => {
+	const poc = repo.createPoc({ name: 'Primax' });
+	const task = repo.createItem({ category: 'poc', poc_id: poc.id, title: 'Mandar follow-up PoC' });
+	const gone = repo.createItem({ category: 'poc', poc_id: poc.id, title: 'Borrada' });
+	repo.completeItem(task.id);
+	repo.deleteItem(gone.id);
+	const hist = repo.getPoc(poc.id).activity.map((a) => [a.kind, a.item_title ?? null]);
+	assert.deepEqual(hist, [
+		['done', 'Mandar follow-up PoC'],
+		['created', 'Mandar follow-up PoC'],
+		['created', null],
+	]);
+});

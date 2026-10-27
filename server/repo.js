@@ -605,7 +605,7 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 		if (!poc) throw notFound('La PoC');
 		const activity = all(
 			`SELECT a.*, i.title AS item_title FROM activity a LEFT JOIN items i ON i.id = a.item_id
-			 WHERE a.poc_id = @id OR (i.poc_id = @id AND a.kind <> 'created')
+			 WHERE a.poc_id = @id OR (i.poc_id = @id AND i.deleted_at IS NULL)
 			 ORDER BY a.occurred_at DESC, a.id DESC LIMIT 300`,
 			{ id },
 		).map(activityOut);
