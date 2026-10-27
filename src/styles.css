@@ -157,7 +157,14 @@ textarea,
 .no-drag,
 .drag button,
 .drag input,
-.drag a {
+.drag a,
+/* Menús, popovers y diálogos flotan sobre las cabeceras arrastrables: sin esto, en Electron la zona de
+   arrastre se queda los clics (p. ej. «Pausar», justo debajo del botón Estado). */
+[data-radix-popper-content-wrapper],
+[role='menu'],
+[role='dialog'],
+[cmdk-root],
+[data-sonner-toaster] {
 	-webkit-app-region: no-drag;
 }
 
