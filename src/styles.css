@@ -44,42 +44,42 @@
 	color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-	:root {
-		--bg: #12152b;
-		--panel: #161a33;
-		--sidebar: #0d1024;
-		--raised: #1c2040;
-		--fg: #e8eafa;
-		--fg-2: #a3a8c6;
-		--fg-3: #6b7090;
-		--line: rgb(232 234 250 / 0.08);
-		--line-strong: rgb(232 234 250 / 0.15);
-		--hover: rgb(232 234 250 / 0.05);
-		--active: rgb(110 128 255 / 0.16);
-		--accent: #5b6dff;
-		--accent-fg: #ffffff;
-		--accent-soft: rgb(91 109 255 / 0.18);
-		--accent-text: #a6b1ff;
-		--ok: #4fd1a1;
-		--ok-soft: rgb(79 209 161 / 0.14);
-		--warn: #f2b45a;
-		--warn-soft: rgb(242 180 90 / 0.15);
-		--danger: #ff6b85;
-		--danger-soft: rgb(255 107 133 / 0.15);
-		--teal: #7be9e4;
-		--teal-soft: rgb(123 233 228 / 0.14);
-		--shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px rgb(0 0 0 / 0.3);
-		--shadow-lg: 0 2px 6px rgb(0 0 0 / 0.4), 0 24px 60px rgb(0 0 0 / 0.5);
-		--series-1: #3987e5;
-		--series-2: #d95926;
-		--series-3: #199e70;
-		--region-iberia: #9085e9;
-		--region-latam: #c98500;
-		--grid: rgb(232 234 250 / 0.07);
-		--axis: rgb(232 234 250 / 0.18);
-		color-scheme: dark;
-	}
+/* Modo oscuro: lo decide src/lib/theme.ts (Sistema, Claro u Oscuro, en Ajustes). Los colores de superficie y
+   acento los pone el tema elegido (shared/themes.js); aquí queda lo que no depende del tema. */
+:root[data-mode='dark'] {
+	--bg: #12152b;
+	--panel: #161a33;
+	--sidebar: #0d1024;
+	--raised: #1c2040;
+	--fg: #e8eafa;
+	--fg-2: #a3a8c6;
+	--fg-3: #6b7090;
+	--line: rgb(232 234 250 / 0.08);
+	--line-strong: rgb(232 234 250 / 0.15);
+	--hover: rgb(232 234 250 / 0.05);
+	--active: rgb(110 128 255 / 0.16);
+	--accent: #4f63ff;
+	--accent-fg: #ffffff;
+	--accent-soft: rgb(91 109 255 / 0.18);
+	--accent-text: #a6b1ff;
+	--ok: #4fd1a1;
+	--ok-soft: rgb(79 209 161 / 0.14);
+	--warn: #f2b45a;
+	--warn-soft: rgb(242 180 90 / 0.15);
+	--danger: #ff6b85;
+	--danger-soft: rgb(255 107 133 / 0.15);
+	--teal: #7be9e4;
+	--teal-soft: rgb(123 233 228 / 0.14);
+	--shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px rgb(0 0 0 / 0.3);
+	--shadow-lg: 0 2px 6px rgb(0 0 0 / 0.4), 0 24px 60px rgb(0 0 0 / 0.5);
+	--series-1: #3987e5;
+	--series-2: #d95926;
+	--series-3: #199e70;
+	--region-iberia: #9085e9;
+	--region-latam: #c98500;
+	--grid: rgb(232 234 250 / 0.07);
+	--axis: rgb(232 234 250 / 0.18);
+	color-scheme: dark;
 }
 
 @theme inline {

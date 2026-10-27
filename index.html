@@ -4,6 +4,15 @@
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>Zepo Desk</title>
+		<script>
+			// Antes de pintar: modo claro/oscuro y colores del tema (de la app o de la última visita), sin destello.
+			try {
+				var root = document.documentElement;
+				var t = (window.zd && window.zd.theme) || JSON.parse(localStorage.getItem('zd-theme') || 'null');
+				root.dataset.mode = t ? t.mode : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+				if (t) for (var k in t.vars) root.style.setProperty(k, t.vars[k]);
+			} catch (e) {}
+		</script>
 	</head>
 	<body>
 		<div id="root"></div>

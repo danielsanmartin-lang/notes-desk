@@ -18,6 +18,7 @@ import { companyUrl, parseHubspotCompanyRef, parseHubspotRef } from '../shared/h
 import { isCountry } from '../shared/countries.js';
 import { regionOf, sumByCurrency } from '../shared/pocs.js';
 import { searchTerms, snippetAround } from '../shared/search.js';
+import { APPEARANCES, THEME_IDS } from '../shared/themes.js';
 
 export class HttpError extends Error {
 	constructor(status, message) {
@@ -43,6 +44,8 @@ export const DEFAULT_SETTINGS = {
 	poc_template: ['Mandar instrucciones de whitelisting y guía', 'Revisar si han creado usuarios y campañas', 'Mandar follow-up PoC'].join('\n'),
 	digest_last: '',
 	hubspot_portal_id: '',
+	appearance: 'system', // system | light | dark
+	theme: 'zepo',
 };
 
 // Campos que guarda un toque o una respuesta para poder deshacerlos.
@@ -179,6 +182,12 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 				clean[k] = String(v);
 			} else if (k === 'open_at_login') {
 				clean[k] = !!v;
+			} else if (k === 'appearance') {
+				if (!APPEARANCES.includes(v)) throw bad('Aspecto no válido');
+				clean[k] = v;
+			} else if (k === 'theme') {
+				if (!THEME_IDS.includes(v)) throw bad('Tema no válido');
+				clean[k] = v;
 			} else {
 				clean[k] = String(v ?? '');
 			}

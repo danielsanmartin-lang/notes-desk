@@ -4,6 +4,8 @@
 export interface ZdBridge {
 	token: string | null;
 	window: 'main' | 'quick';
+	/** Modo y colores con los que pintar al abrir (los aplica index.html). */
+	theme: { mode: 'light' | 'dark'; vars: Record<string, string> } | null;
 	onOpenItem(cb: (id: number) => void): () => void;
 	onNavigate(cb: (view: string) => void): () => void;
 	onQuickShown(cb: () => void): () => void;

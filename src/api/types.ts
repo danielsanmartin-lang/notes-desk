@@ -174,6 +174,8 @@ export interface WeekDetail {
 	poc_events: WeekLogEntry[];
 }
 
+export type Appearance = 'system' | 'light' | 'dark';
+
 export interface Settings {
 	fup_days: number;
 	digest_time: string;
@@ -181,6 +183,8 @@ export interface Settings {
 	open_at_login: boolean;
 	poc_template: string;
 	hubspot_portal_id: string;
+	appearance: Appearance;
+	theme: string;
 }
 
 export interface AccountSummary {

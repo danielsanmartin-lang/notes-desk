@@ -69,6 +69,11 @@ Lo mismo se entiende en la **captura rápida** (⌥Espacio desde cualquier app):
 `#fup` / `#tarea` / `#poc` fijan la categoría y `@nombre` la PoC (`@"Corporación América"` si lleva
 espacios). En la captura rápida, Tab cambia el tipo, ↩ guarda y ⌘↩ guarda y abre la tarea.
 
+- **Apariencia** (Ajustes): modo Sistema, Claro u Oscuro y seis temas de color (Zepo, Océano, Bosque,
+  Coral, Lavanda y Grafito), cada uno con su versión clara y oscura.
+- El **historial de cada PoC** recoge sus tareas desde que se añaden, además de toques, respuestas,
+  notas, completadas y pausas.
+
 ### Atajos
 
 ⌘K buscar y acciones · ⌘F buscador del Inicio · ⌘N nueva tarea · ⌘1–9 secciones · ⌘, ajustes · ↑ ↓ moverse por la lista ·

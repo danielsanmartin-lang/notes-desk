@@ -2,7 +2,7 @@
 // por sesión) y monta la ventana principal, la captura rápida (⌥Espacio), el icono de la barra de menús y los
 // avisos. Cerrar la ventana no cierra la app: sigue en la barra de menús hasta ⌘Q.
 
-import { app, BrowserWindow, globalShortcut, ipcMain, Menu, shell } from 'electron';
+import { app, BrowserWindow, globalShortcut, ipcMain, Menu, nativeTheme, shell } from 'electron';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { backupDaily, openDb } from '../server/db.js';
 import { startServer } from '../server/index.js';
 import { createRepo } from '../server/repo.js';
+import { themeById } from '../shared/themes.js';
 import { buildMenu } from './menu.js';
 import { startNotifications } from './notifications.js';
 import { createQuickCapture } from './quick-capture.js';
@@ -114,6 +115,8 @@ function openExternal(url) {
 
 function applySettings() {
 	const s = ctx.repo.getSettings();
+	// Claro/oscuro para toda la app: también cambia el material translúcido de la barra lateral.
+	nativeTheme.themeSource = s.appearance;
 	globalShortcut.unregisterAll();
 	if (s.shortcut && !globalShortcut.register(s.shortcut, () => ctx.quick.toggle())) {
 		console.warn(`No se pudo registrar el atajo ${s.shortcut}: lo usa otra app`);
@@ -122,8 +125,15 @@ function applySettings() {
 	ctx.tray.refresh();
 }
 
+/** Modo y colores del tema para pintar la ventana ya con ellos, sin destello (los aplica index.html). */
+function initialTheme() {
+	if (!ctx) return null;
+	const mode = nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
+	return { mode, vars: themeById(ctx.repo.getSettings().theme)[mode] };
+}
+
 ipcMain.on('zd:init', (e) => {
-	e.returnValue = { token: ctx?.token ?? null, window: ctx?.quick.owns(e.sender) ? 'quick' : 'main' };
+	e.returnValue = { token: ctx?.token ?? null, window: ctx?.quick.owns(e.sender) ? 'quick' : 'main', theme: initialTheme() };
 });
 ipcMain.on('zd:open-item', (_e, id) => {
 	ctx.quick.hide();

@@ -14,6 +14,7 @@ const on = (channel) => (cb) => {
 contextBridge.exposeInMainWorld('zd', {
 	token: init.token,
 	window: init.window,
+	theme: init.theme,
 	onOpenItem: on('zd:open-item'),
 	onNavigate: on('zd:navigate'),
 	onQuickShown: on('zd:quick-shown'),

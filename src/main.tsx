@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { Toaster } from 'sonner';
 import { subscribe } from './api/client';
 import { App } from './App';
+import { ThemeSync } from './lib/theme';
 import { QuickCapture } from './QuickCapture';
 import './styles.css';
 
@@ -27,6 +28,7 @@ const toastStyle = {
 createRoot(document.getElementById('root')!).render(
 	<StrictMode>
 		<QueryClientProvider client={queryClient}>
+			<ThemeSync />
 			{isQuick ? <QuickCapture /> : <App />}
 			<Toaster position={isQuick ? 'bottom-center' : 'bottom-center'} style={toastStyle} duration={4500} gap={8} visibleToasts={3} />
 		</QueryClientProvider>

@@ -62,7 +62,7 @@ export function Checkbox({
 				<motion.path
 					d="M3.5 8.5l3 3 6-7"
 					fill="none"
-					stroke="white"
+					stroke="var(--accent-fg)"
 					strokeWidth={2.2}
 					strokeLinecap="round"
 					strokeLinejoin="round"

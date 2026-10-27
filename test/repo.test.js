@@ -184,6 +184,11 @@ test('ajustes validados y con valores por defecto', () => {
 	assert.equal(repo.setSettings({ fup_days: 5, open_at_login: true }).fup_days, 5);
 	assert.throws(() => repo.setSettings({ fup_days: 0 }), /1 a 60/);
 	assert.throws(() => repo.setSettings({ digest_time: '25:00' }), /Hora/);
+	assert.deepEqual([repo.getSettings().appearance, repo.getSettings().theme], ['system', 'zepo']);
+	const s = repo.setSettings({ appearance: 'dark', theme: 'oceano' });
+	assert.deepEqual([s.appearance, s.theme], ['dark', 'oceano']);
+	assert.throws(() => repo.setSettings({ appearance: 'sepia' }), /Aspecto/);
+	assert.throws(() => repo.setSettings({ theme: 'rosa' }), /Tema/);
 });
 
 test('recordatorios pendientes', () => {

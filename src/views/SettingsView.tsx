@@ -1,10 +1,14 @@
-import { Bell, Database, FlaskConical, FolderOpen, Keyboard, Link2, Power, Send, Settings } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { Bell, Check, Database, FlaskConical, FolderOpen, Keyboard, Link2, Monitor, Moon, Palette, Power, Send, Settings, Sun } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import type { CSSProperties, ReactNode } from 'react';
+import { THEMES } from '../../shared/themes.js';
 import { useActions, useHubspotStatus, useMeta, useSettings } from '../api/hooks';
 import { Chip } from '../components/bits';
 import { AutoTextarea, Button, inputClass, useDraft } from '../components/ui';
 import { isElectron, zd } from '../lib/bridge';
 import { cx } from '../lib/format';
+import { useMode, type Mode } from '../lib/theme';
+import type { Appearance } from '../api/types';
 import { useListIds, ViewBody, ViewHeader } from './common';
 
 const SHORTCUTS = [
@@ -30,11 +34,92 @@ function Card({ icon, title, description, children }: { icon: ReactNode; title: 
 	);
 }
 
+const APPEARANCE_OPTIONS: { value: Appearance; label: string; icon: ReactNode }[] = [
+	{ value: 'system', label: 'Sistema', icon: <Monitor /> },
+	{ value: 'light', label: 'Claro', icon: <Sun /> },
+	{ value: 'dark', label: 'Oscuro', icon: <Moon /> },
+];
+
+/** Miniatura de un tema en el modo que se ve ahora: barra lateral, una tarea marcada y un botón. */
+function ThemePreview({ theme, mode }: { theme: (typeof THEMES)[number]; mode: Mode }) {
+	const v = theme[mode] as Record<string, string>;
+	return (
+		<div className="flex h-[68px] overflow-hidden rounded-lg border" style={{ background: v['--bg'], borderColor: v['--line-strong'] } as CSSProperties}>
+			<div className="flex w-[30%] flex-col gap-1.5 p-2" style={{ background: v['--sidebar'] }}>
+				<span className="h-1.5 w-4/5 rounded-full" style={{ background: v['--accent-soft'] }} />
+				<span className="h-1.5 w-3/5 rounded-full" style={{ background: v['--line-strong'] }} />
+				<span className="h-1.5 w-2/3 rounded-full" style={{ background: v['--line-strong'] }} />
+			</div>
+			<div className="flex flex-1 flex-col gap-2 p-2.5">
+				<div className="flex items-center gap-1.5">
+					<span className="flex size-2.5 items-center justify-center rounded-full" style={{ background: v['--accent'] }} />
+					<span className="h-1.5 flex-1 rounded-full" style={{ background: v['--fg'], opacity: 0.75 }} />
+				</div>
+				<div className="flex items-center gap-1.5">
+					<span className="size-2.5 rounded-full border" style={{ borderColor: v['--fg-3'] }} />
+					<span className="h-1.5 w-2/3 rounded-full" style={{ background: v['--fg-3'] }} />
+				</div>
+				<span className="mt-auto h-3 w-9 self-end rounded-[4px]" style={{ background: v['--accent'] }} />
+			</div>
+		</div>
+	);
+}
+
+function AppearanceCard({ appearance, theme, onChange }: { appearance: Appearance; theme: string; onChange: (patch: { appearance?: Appearance; theme?: string }) => void }) {
+	const mode = useMode(appearance);
+	return (
+		<Card icon={<Palette />} title="Apariencia" description="Modo claro u oscuro y el tema de colores de toda la app.">
+			<div className="inline-flex rounded-lg bg-hover p-0.5" role="radiogroup" aria-label="Modo">
+				{APPEARANCE_OPTIONS.map((o) => (
+					<button
+						key={o.value}
+						type="button"
+						role="radio"
+						aria-checked={appearance === o.value}
+						onClick={() => onChange({ appearance: o.value })}
+						className={cx(
+							'flex h-7 items-center gap-1.5 rounded-md px-3 text-[12.5px] font-medium transition-colors [&>svg]:size-3.5',
+							appearance === o.value ? 'bg-raised text-fg shadow-card' : 'text-fg-2 hover:text-fg',
+						)}
+					>
+						{o.icon}
+						{o.label}
+					</button>
+				))}
+			</div>
+			{appearance === 'system' && <p className="mt-1.5 text-[11.5px] text-fg-3">Sigue el modo de macOS: ahora, {mode === 'dark' ? 'oscuro' : 'claro'}.</p>}
+			<div className="mt-4 grid grid-cols-3 gap-3" role="radiogroup" aria-label="Tema">
+				{THEMES.map((t) => {
+					const on = t.id === theme;
+					return (
+						<button
+							key={t.id}
+							type="button"
+							role="radio"
+							aria-checked={on}
+							onClick={() => onChange({ theme: t.id })}
+							className={cx('group rounded-xl p-1.5 text-left transition-colors', on ? 'bg-accent-soft ring-2 ring-accent' : 'hover:bg-hover')}
+						>
+							<ThemePreview theme={t} mode={mode} />
+							<div className="mt-1.5 flex items-center gap-1 px-0.5">
+								<span className="text-[12.5px] font-medium">{t.name}</span>
+								{on && <Check className="size-3.5 text-accent-text" />}
+							</div>
+							<div className="px-0.5 text-[11px] text-fg-3">{t.hint}</div>
+						</button>
+					);
+				})}
+			</div>
+		</Card>
+	);
+}
+
 export function SettingsView() {
 	const { data: s } = useSettings();
 	const { data: meta } = useMeta();
 	const { data: hs } = useHubspotStatus();
 	const a = useActions();
+	const qc = useQueryClient();
 	const template = useDraft(s?.poc_template, (v) => a.saveSettings({ poc_template: v }));
 	useListIds([]);
 	if (!s) return null;
@@ -43,6 +128,16 @@ export function SettingsView() {
 		<>
 			<ViewHeader icon={<Settings />} iconClass="bg-hover text-fg-2" title="Ajustes" />
 			<ViewBody className="max-w-[680px]">
+				<AppearanceCard
+					appearance={s.appearance}
+					theme={s.theme}
+					onChange={(patch) => {
+						// Se ve al instante; el servidor lo guarda detrás.
+						qc.setQueryData(['settings'], { ...s, ...patch });
+						a.saveSettings(patch);
+					}}
+				/>
+
 				<Card icon={<Send />} title="Follow-ups" description="Cuando registras un toque, el siguiente follow-up se programa solo (nunca en fin de semana).">
 					<div className="flex items-center gap-2 text-[13px]">
 						Volver a perseguir a los
