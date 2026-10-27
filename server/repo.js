@@ -70,14 +70,20 @@ const OPEN = `i.state <> 'done'`;
 // Una tarea con subtareas abiertas cede su contador (fecha, espera, toques) a cada subtarea: en Hoy y
 // Próximos salen las subtareas, no la tarea madre.
 const HAS_OPEN_SUBS = `EXISTS (SELECT 1 FROM items s WHERE s.parent_id = i.id AND s.deleted_at IS NULL AND s.state <> 'done')`;
+// Lo que tiene fecha no sale en Inicio hasta ese día, aunque esté destacado.
 const TODAY_COND = `${VISIBLE} AND ${ACTIVE_POC} AND ${OPEN}
-	AND ((i.due_date IS NOT NULL AND i.due_date <= @today AND NOT ${HAS_OPEN_SUBS}) OR (i.flagged = 1 AND i.parent_id IS NULL))`;
+	AND ((i.due_date IS NOT NULL AND i.due_date <= @today AND NOT ${HAS_OPEN_SUBS})
+	     OR (i.flagged = 1 AND i.parent_id IS NULL AND (i.due_date IS NULL OR i.due_date <= @today)))`;
 const UPCOMING_COND = `${VISIBLE} AND ${ACTIVE_POC} AND ${OPEN} AND i.due_date > @today AND i.due_date <= @horizon AND NOT ${HAS_OPEN_SUBS}`;
 const FOLLOWUPS_COND = `${VISIBLE} AND ${OPEN} AND i.parent_id IS NULL
 	AND (i.category = 'followup' OR (@includePoc = 1 AND i.category = 'poc' AND i.state = 'waiting' AND ${ACTIVE_POC}))`;
 const TASKS_COND = `${VISIBLE} AND ${OPEN} AND i.parent_id IS NULL AND i.category = 'task'`;
 // En Hoy también sale lo que no tiene fecha y te toca a ti (lo que espera respuesta sin fecha, no).
-const UNDATED_COND = `${VISIBLE} AND ${ACTIVE_POC} AND i.state = 'todo' AND i.parent_id IS NULL AND i.due_date IS NULL AND i.flagged = 0`;
+// Una tarea sin fecha con subtareas abiertas solo cuenta como «sin fecha» si alguna de ellas tampoco la tiene y
+// te toca: si todas tienen fecha, la tarea sale cuando llega la de cada subtarea (como fila propia).
+const UNDATED_COND = `${VISIBLE} AND ${ACTIVE_POC} AND i.state = 'todo' AND i.parent_id IS NULL AND i.due_date IS NULL AND i.flagged = 0
+	AND (NOT ${HAS_OPEN_SUBS} OR EXISTS (SELECT 1 FROM items s WHERE s.parent_id = i.id AND s.deleted_at IS NULL
+	     AND s.state = 'todo' AND s.due_date IS NULL))`;
 // La cuenta de una tarea es su empresa o, si no tiene, la empresa de su PoC.
 const ACCOUNT_EXPR = `coalesce(nullif(i.company, ''), p.company)`;
 

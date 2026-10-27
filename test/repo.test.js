@@ -246,6 +246,26 @@ test('Hoy incluye lo que no tiene fecha y te toca, también de PoCs activas', ()
 	assert.equal(repo.counts().undated, 2);
 });
 
+test('lo que tiene fecha no sale en Inicio hasta ese día', () => {
+	const fup = repo.createItem({ category: 'followup', title: 'FUP a Catalina', due_date: '2026-10-29' });
+	repo.createItem({ category: 'task', title: 'Destacada para el jueves', due_date: '2026-10-29', flagged: true });
+	const parent = repo.createItem({ category: 'followup', title: 'ENGIE Chile' });
+	const sub = repo.createItem({ parent_id: parent.id, title: 'Okta', due_date: '2026-10-29' });
+	const mixed = repo.createItem({ category: 'task', title: 'Revisar deals' });
+	repo.createItem({ parent_id: mixed.id, title: 'Sonda', due_date: '2026-11-02' });
+	repo.createItem({ parent_id: mixed.id, title: 'Cafam' });
+
+	let today = repo.listItems('today');
+	assert.deepEqual(today.items, [], 'ni lo destacado con fecha futura');
+	assert.deepEqual(today.undated.map((i) => i.id), [mixed.id], 'la madre sale si alguna subtarea no tiene fecha');
+	assert.equal(repo.counts().today, 0);
+
+	at('2026-10-29T08:00:00');
+	today = repo.listItems('today');
+	assert.deepEqual(today.items.map((i) => i.id).sort(), [fup.id, sub.id, today.items.find((i) => i.flagged).id].sort());
+	assert.ok(!today.undated.some((i) => i.id === parent.id));
+});
+
 test('cuentas: agrupa por empresa (o la de su PoC) sin distinguir mayúsculas ni acentos', () => {
 	const poc = repo.createPoc({ name: 'Confirmación PoC', company: 'Cafam' });
 	repo.addPocAdmin(poc.id, { name: 'Brigitte', email: 'b@cafam.co' });

@@ -11,7 +11,8 @@ SQLite local.
 - **Inicio** (antes «Hoy»): lo que vence hoy o antes, los follow-ups que toca volver a perseguir, lo destacado (★) y,
   en un grupo aparte, todo lo que no tiene fecha y te toca a ti (también las tareas de las PoCs
   activas, con el nombre de su PoC). El número de la barra lateral, del Dock y de la barra de menús
-  cuenta solo lo que vence, no lo que no tiene fecha.
+  cuenta solo lo que vence, no lo que no tiene fecha. Lo que tiene fecha (aunque esté destacado, o una tarea
+  cuyas subtareas tienen todas fecha) no aparece hasta ese día.
   Arriba tiene un **buscador** (⌘F): escribe una o varias palabras y salen las tareas y follow-ups
   (pendientes y hechos) que las contienen en el título, las notas, la empresa, el contacto, la PoC o el
   historial, con las palabras resaltadas.
