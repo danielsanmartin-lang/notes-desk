@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { beforeEach, test } from 'node:test';
-import { openDb } from '../server/db.js';
+import { migrate, openDb } from '../server/db.js';
 import { createRepo } from '../server/repo.js';
 
 let clock;
@@ -510,4 +510,44 @@ test('el siguiente paso de la PoC puede ser una tarea de su cuenta si llega ante
 	// Con la PoC ganada, lo de la cuenta ya no es su siguiente paso.
 	repo.setPocStatus(poc.id, { status: 'won' });
 	assert.equal(repo.getPoc(poc.id).poc.next.title, 'Revisar usuarios');
+});
+
+test('cliente o partner: se detecta al crear y la PoC dice desde cuándo espera cada uno', () => {
+	const poc = repo.createPoc({ name: 'MyInvestor (Fujitsu)', company: 'MyInvestor', partner: 'Fujitsu' });
+	repo.addPocAdmin(poc.id, { name: 'Ángel Ruiz', kind: 'partner' });
+	const viaWord = repo.createItem({ category: 'task', title: 'He hecho FUP con el partner por whatsapp', company: 'MyInvestor' });
+	const viaName = repo.createItem({ category: 'poc', poc_id: poc.id, title: 'Preguntar a FUJITSU directamente' });
+	const viaContact = repo.createItem({ category: 'followup', title: 'Llamar', contact: 'Angel Ruiz', company: 'MyInvestor' });
+	const client = repo.createItem({ category: 'poc', poc_id: poc.id, title: 'Revisar usuarios del cliente' });
+	const other = repo.createItem({ category: 'task', title: 'Hablar con el partner', company: 'Primax' });
+	assert.deepEqual(
+		[viaWord, viaName, viaContact, client, other].map((i) => i.audience),
+		['partner', 'partner', 'partner', null, null],
+	);
+	// A mano manda lo elegido.
+	assert.equal(repo.updateItem(viaName.id, { audience: 'client' }).audience, null);
+	assert.equal(repo.createItem({ category: 'poc', poc_id: poc.id, title: 'Partner', audience: 'client' }).audience, null);
+
+	repo.updateItem(viaWord.id, { state: 'waiting' });
+	at('2026-10-28T09:00:00');
+	repo.updateItem(client.id, { state: 'waiting' });
+	const p = repo.getPoc(poc.id).poc;
+	assert.equal(p.partner_waiting_since, '2026-10-26T10:00:00');
+	assert.equal(p.client_waiting_since, '2026-10-28T09:00:00');
+});
+
+test('migración 007: lo ya apuntado que nombra al partner queda marcado como del partner', () => {
+	const db = openDb(':memory:');
+	const r = createRepo(db, { now: () => clock });
+	const poc = r.createPoc({ name: 'MyInvestor (Fujitsu)', company: 'MyInvestor', partner: 'Fujitsu' });
+	const a = r.createItem({ category: 'task', title: 'He hecho FUP con el partner', company: 'myinvestor' });
+	const b = r.createItem({ category: 'poc', poc_id: poc.id, title: 'Preguntar a Fujitsu' });
+	const c = r.createItem({ category: 'poc', poc_id: poc.id, title: 'Kickoff con el cliente' });
+	db.exec('ALTER TABLE items DROP COLUMN audience');
+	db.pragma('user_version = 6');
+	migrate(db);
+	assert.deepEqual(
+		[a, b, c].map((i) => db.prepare('SELECT audience FROM items WHERE id = ?').get(i.id).audience),
+		['partner', 'partner', null],
+	);
 });

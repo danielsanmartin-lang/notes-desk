@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { pocAmount as sharedPocAmount, regionOf, sumByCurrency } from '../../shared/pocs.js';
 import { daysBetween } from '../../shared/dates.js';
 import { fold } from '../../shared/quickparse.js';
-import type { Poc } from '../api/types';
+import type { Item, Poc } from '../api/types';
 import { money } from './format';
 
 export type Region = 'iberia' | 'latam' | 'none';
@@ -61,6 +61,12 @@ export function pocsOfAccount<P extends Pick<Poc, 'company' | 'status'>>(pocs: P
 	const key = fold(company ?? '').trim();
 	if (!key) return [];
 	return pocs.filter((p) => (p.status === 'active' || (paused && p.status === 'paused')) && fold(p.company ?? '').trim() === key);
+}
+
+/** El partner con el que va una tarea: el de su PoC o, si es de la cuenta, el de una PoC viva de esa cuenta. */
+export function partnerOf(pocs: Poc[], item: Pick<Item, 'poc_id' | 'company'>) {
+	if (item.poc_id) return pocs.find((p) => p.id === item.poc_id)?.partner ?? null;
+	return pocsOfAccount(pocs, item.company, { paused: true }).find((p) => p.partner)?.partner ?? null;
 }
 
 export type StatusFilter = 'all' | 'active' | 'paused' | 'won' | 'lost';

@@ -102,6 +102,11 @@ function StatusChip({ poc, today }: { poc: Pick<Poc, 'status' | 'paused_until'>;
 	);
 }
 
+function waitedFor(since: string, today: string) {
+	const d = daysBetween(since.slice(0, 10), today);
+	return d <= 0 ? 'desde hoy' : `hace ${plural(d, 'día', 'días')}`;
+}
+
 export function PocCard({ poc, today }: { poc: Poc; today: string }) {
 	const go = useUI((s) => s.go);
 	const idle = poc.last_activity_at ? daysBetween(poc.last_activity_at.slice(0, 10), today) : null;
@@ -141,7 +146,18 @@ export function PocCard({ poc, today }: { poc: Poc; today: string }) {
 				<StatusChip poc={poc} today={today} />
 				{poc.status !== 'won' && poc.status !== 'lost' && <OpenDays poc={poc} today={today} />}
 				{poc.hubspot_stage && <Chip tone="teal">HubSpot · {poc.hubspot_stage}</Chip>}
-				{poc.waiting > 0 && <Chip tone="warn">{poc.waiting} esperando</Chip>}
+				{poc.partner && (poc.status === 'active' || poc.status === 'paused') ? (
+					<>
+						{poc.client_waiting_since && <Chip tone="warn">Cliente sin responder {waitedFor(poc.client_waiting_since, today)}</Chip>}
+						{poc.partner_waiting_since && (
+							<Chip tone="warn">
+								{poc.partner} sin responder {waitedFor(poc.partner_waiting_since, today)}
+							</Chip>
+						)}
+					</>
+				) : (
+					poc.waiting > 0 && <Chip tone="warn">{poc.waiting} esperando</Chip>
+				)}
 			</div>
 			{(poc.start_date || poc.admin_count > 0) && (
 				<div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-fg-2">

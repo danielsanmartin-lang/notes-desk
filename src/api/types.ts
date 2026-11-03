@@ -22,6 +22,8 @@ export interface Item {
 	last_touch_at: string | null;
 	message_template: string | null;
 	flagged: boolean;
+	/** En una PoC con partner: si va al partner. NULL = al cliente. */
+	audience: 'client' | 'partner' | null;
 	sort_order: number;
 	created_at: string;
 	updated_at: string;
@@ -109,6 +111,9 @@ export interface Poc {
 	amount: number | null;
 	currency: string | null;
 	admin_count: number;
+	/** Desde cuándo espera respuesta lo más antiguo del partner y del cliente (PoC y su cuenta). */
+	partner_waiting_since: string | null;
+	client_waiting_since: string | null;
 	total: number;
 	done: number;
 	waiting: number;

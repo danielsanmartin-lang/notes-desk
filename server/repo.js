@@ -240,6 +240,11 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 			out.remind_at = v;
 		}
 		if ('flagged' in data) out.flagged = data.flagged ? 1 : 0;
+		if ('audience' in data) {
+			const v = emptyToNull(data.audience);
+			if (v && !['client', 'partner'].includes(v)) throw bad('Elige cliente o partner');
+			out.audience = v === 'partner' ? 'partner' : null;
+		}
 		if ('state' in data) {
 			if (!['todo', 'waiting'].includes(data.state)) throw bad('Estado no válido');
 			out.state = data.state;
@@ -253,6 +258,26 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 			 WHERE category = @category AND coalesce(poc_id, 0) = @poc AND coalesce(parent_id, 0) = @parent`,
 			{ category, poc: pocId ?? 0, parent: parentId ?? 0 },
 		).s;
+	}
+
+	/**
+	 * ¿Va al partner? Solo si la PoC de la tarea (o una viva de su cuenta) tiene partner, y el título o el
+	 * contacto lo nombran: «partner», el nombre del partner o el de su contacto en el partner.
+	 */
+	function guessAudience({ title, contact, company, poc_id }) {
+		const pocs = poc_id
+			? all('SELECT id, partner FROM pocs WHERE id = @id AND partner IS NOT NULL', { id: poc_id })
+			: company
+				? all(
+						`SELECT id, partner FROM pocs WHERE partner IS NOT NULL AND status IN ('active', 'paused') AND trim(fold(company)) = @key`,
+						{ key: fold(company).trim() },
+					)
+				: [];
+		if (!pocs.length) return null;
+		const text = fold(`${title} ${contact ?? ''}`);
+		const names = ['partner', ...pocs.map((p) => p.partner)];
+		for (const p of pocs) names.push(...pocContacts(p.id).filter((c) => c.kind === 'partner').map((c) => c.name));
+		return names.some((n) => fold(n).trim() && text.includes(fold(n).trim())) ? 'partner' : null;
 	}
 
 	function createItem(data) {
@@ -271,6 +296,7 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 		} else {
 			d.poc_id = null;
 		}
+		if (!('audience' in d)) d.audience = guessAudience(d);
 		const t = ts();
 		const state = d.state ?? 'todo';
 		const row = {
@@ -587,6 +613,10 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 
 	// ── PoCs ───────────────────────────────────────────────────────────────────
 
+	// Lo que espera respuesta en la PoC: sus tareas y las de su cuenta que no están en ninguna PoC.
+	const WAITING_ON_POC = `i.state = 'waiting' AND i.deleted_at IS NULL
+		AND (i.poc_id = p.id OR (i.poc_id IS NULL AND p.company IS NOT NULL AND trim(fold(i.company)) = trim(fold(p.company))))`;
+
 	const POC_SELECT = `
 		SELECT p.*,
 		  (SELECT COUNT(*) FROM items i WHERE i.poc_id = p.id AND i.parent_id IS NULL AND i.deleted_at IS NULL) AS total,
@@ -594,7 +624,9 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 		  (SELECT COUNT(*) FROM items i WHERE i.poc_id = p.id AND i.deleted_at IS NULL AND i.state = 'waiting') AS waiting,
 		  (SELECT max(a.occurred_at) FROM activity a LEFT JOIN items i ON i.id = a.item_id
 		    WHERE a.poc_id = p.id OR i.poc_id = p.id) AS last_activity_at,
-		  (SELECT COUNT(*) FROM poc_admins pa WHERE pa.poc_id = p.id AND pa.kind = 'admin') AS admin_count
+		  (SELECT COUNT(*) FROM poc_admins pa WHERE pa.poc_id = p.id AND pa.kind = 'admin') AS admin_count,
+		  (SELECT min(i.waiting_since) FROM items i WHERE ${WAITING_ON_POC} AND i.audience = 'partner') AS partner_waiting_since,
+		  (SELECT min(i.waiting_since) FROM items i WHERE ${WAITING_ON_POC} AND i.audience IS NULL) AS client_waiting_since
 		FROM pocs p`;
 
 	// Personas de la PoC: contacto principal, admins del cliente y contacto del partner (columna kind).

@@ -9,6 +9,7 @@ import {
 	Copy,
 	Ellipsis,
 	Hand,
+	Handshake,
 	Hourglass,
 	Mail,
 	MessageCircle,
@@ -30,6 +31,7 @@ import type { Item } from '../api/types';
 import { openExternal } from '../lib/bridge';
 import { CATEGORY_LABEL, cx, daysWaiting, formatMoment, plural } from '../lib/format';
 import { useItemOps } from '../lib/ops';
+import { partnerOf } from '../lib/pocs';
 import { useUI } from '../lib/store';
 import { Checkbox, DueChip, PocDot, WaitingChip } from './bits';
 import { DatePicker, ReminderPicker } from './DatePicker';
@@ -124,6 +126,7 @@ function DetailBody({
 	const hasOpenSubs = subtasks.some((x) => x.state !== 'done');
 	const activePocs = pocs.filter((p) => p.status === 'active' || p.status === 'paused');
 	const pocCompany = pocs.find((p) => p.id === item.poc_id)?.company ?? null;
+	const partner = partnerOf(pocs, item);
 
 	const addNote = async () => {
 		if (!noteText.trim()) return;
@@ -318,6 +321,25 @@ function DetailBody({
 							/>
 						)}
 					</Row>
+					{partner && (
+						<Row icon={<Handshake />} label="Con quién">
+							<div className="inline-flex gap-0.5 rounded-lg bg-hover p-0.5">
+								{([null, 'partner'] as const).map((v) => (
+									<button
+										key={v ?? 'client'}
+										type="button"
+										onClick={() => item.audience !== v && save({ audience: v })}
+										className={cx(
+											'inline-flex h-6.5 items-center rounded-md px-2.5 text-[12.5px] font-medium transition-colors',
+											item.audience === v ? 'bg-raised text-fg shadow-sm' : 'text-fg-3 hover:text-fg-2',
+										)}
+									>
+										{v ? partner : 'Cliente'}
+									</button>
+								))}
+							</div>
+						</Row>
+					)}
 					<Row icon={<CalendarDays />} label={item.state === 'waiting' ? 'Próximo FUP' : 'Fecha'}>
 						<DatePicker value={item.due_date} onChange={(v) => save({ due_date: v })} />
 					</Row>

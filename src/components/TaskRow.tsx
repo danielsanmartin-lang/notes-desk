@@ -1,13 +1,14 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { CornerDownRight, FlaskConical, GripVertical, ListChecks, Send, StickyNote, Trash2 } from 'lucide-react';
+import { CornerDownRight, FlaskConical, GripVertical, Handshake, ListChecks, Send, StickyNote, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useState } from 'react';
-import { useActions } from '../api/hooks';
+import { useActions, usePocs } from '../api/hooks';
 import type { Item } from '../api/types';
 import { openExternal } from '../lib/bridge';
 import { cx, plural } from '../lib/format';
 import { useItemOps } from '../lib/ops';
+import { partnerOf } from '../lib/pocs';
 import { useUI } from '../lib/store';
 import { ChannelIcon, Checkbox, Chip, DueChip, FlagStar, Highlight, PocDot, PocTag, ReminderChip, WaitingChip, WhoChip } from './bits';
 import { Menu, MenuItem } from './ui';
@@ -35,6 +36,7 @@ export function TaskRow({ item, today, options = {} }: { item: Item; today: stri
 	const setTouchOpen = useUI((s) => s.setTouchOpen);
 	const ops = useItemOps();
 	const a = useActions();
+	const { data: pocs = [] } = usePocs();
 	// El check se ve al instante; la fila baja a "completadas" cuando responde el servidor.
 	const [optimistic, setOptimistic] = useState<boolean | null>(null);
 	const done = optimistic ?? item.state === 'done';
@@ -131,6 +133,11 @@ export function TaskRow({ item, today, options = {} }: { item: Item; today: stri
 							</span>
 						)}
 						{options.showCategory && item.category === 'followup' && <Chip tone="neutral">Follow-up</Chip>}
+						{item.audience === 'partner' && (
+							<Chip tone="teal" icon={<Handshake />} title="Va al partner">
+								{partnerOf(pocs, item) ?? 'Partner'}
+							</Chip>
+						)}
 						{options.showPoc && item.poc_name && !pocPrefix && <PocTag name={item.poc_name} color={item.poc_color} />}
 						<WhoChip
 							company={item.company}
