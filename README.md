@@ -1,4 +1,4 @@
-# Desk
+# Notes Desk
 
 A local-first desktop app for macOS that keeps your **notes, tasks, follow-ups and projects** in one
 place. Everything is stored in a local SQLite database: no account, no cloud.
@@ -86,7 +86,7 @@ the Dock. Closing the window does not quit the app (⌘Q does).
 
 ## Data
 
-- Database: `<app>.db` (SQLite, WAL mode) in the app's folder under `~/Library/Application Support/`.
+- Database: `~/Library/Application Support/Notes Desk/notes-desk.db` (SQLite, WAL mode).
 - Automatic backups: one per day in the `backups/` folder next to it, keeping the last 14.
 - Tables: `items` (follow-ups, tasks and project tasks; `state` = `todo`, `waiting`, `done`), `pocs`,
   `activity` (the log: touches, replies, notes, completions, pauses…), `accounts` and `settings`.
@@ -102,7 +102,7 @@ Electron (main process)               electron/
  ├─ Menu bar            │
  ├─ Notifications       │
  └─ Express server ◄────┘             server/   (index.js routes, repo.js logic, db.js SQLite)
-        └─ better-sqlite3 → local .db
+        └─ better-sqlite3 → notes-desk.db
 UI: React 19 + TypeScript + Vite + Tailwind v4   src/
 Shared logic (dates, quick-entry parser)         shared/
 ```
@@ -112,10 +112,10 @@ on every launch. The UI talks to it over HTTP, so in development it can also run
 
 ## Download
 
-Every published version is in [Releases](../../releases) as a `…-mac-arm64.zip` (Apple Silicon).
-Unzip it, drag the `.app` into Applications and, the first time, right-click → **Open** (it is
+Every published version is in [Releases](../../releases) as
+`Notes-Desk-X.Y.Z-mac-arm64.zip` (Apple Silicon). Unzip it, drag **Notes Desk.app** into Applications and, the first time, right-click → **Open** (it is
 ad-hoc signed, not notarized). If macOS says it is damaged:
-`xattr -dr com.apple.quarantine "/Applications/<app name>.app"`.
+`xattr -dr com.apple.quarantine "/Applications/Notes Desk.app"`.
 
 ## Publishing a version
 
