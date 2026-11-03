@@ -56,6 +56,13 @@ export function openSince(p: Pick<Poc, 'start_date' | 'created_at' | 'status' | 
 	return { days: d, label: d === 0 ? 'Abierta hoy' : `${d} ${d === 1 ? 'día abierta' : 'días abierta'}`, future: false };
 }
 
+/** Las PoCs vivas (activas o, con `paused`, también en pausa) de una cuenta, comparando sin acentos ni mayúsculas. */
+export function pocsOfAccount<P extends Pick<Poc, 'company' | 'status'>>(pocs: P[], company: string | null | undefined, { paused = false } = {}) {
+	const key = fold(company ?? '').trim();
+	if (!key) return [];
+	return pocs.filter((p) => (p.status === 'active' || (paused && p.status === 'paused')) && fold(p.company ?? '').trim() === key);
+}
+
 export type StatusFilter = 'all' | 'active' | 'paused' | 'won' | 'lost';
 
 export interface PocFilterState {

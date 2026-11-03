@@ -36,6 +36,14 @@ export function useItemOps() {
 					action: { label: 'Deshacer', onClick: () => a.deleteActivity(res.activity_id) },
 				});
 			},
+			/** Mete una tarea o follow-up de la cuenta en su PoC: pasa a ser tarea de la PoC y cuenta en su progreso. */
+			moveToPoc: async (item: Pick<Item, 'id' | 'title' | 'category'>, poc: { id: number; name: string }) => {
+				await a.update(item.id, { category: 'poc', poc_id: poc.id });
+				toast.success(`Metida en ${poc.name}`, {
+					description: item.title,
+					action: { label: 'Deshacer', onClick: () => a.update(item.id, { category: item.category, poc_id: null }) },
+				});
+			},
 			reply: async (item: Pick<Item, 'id'>, body: { body?: string; complete?: boolean }) => {
 				const res = await a.reply(item.id, body);
 				toast.success(body.complete ? 'Respondido y cerrado' : 'Han respondido: te toca a ti', {

@@ -488,3 +488,14 @@ test('la PoC enseña lo que se apunta en su cuenta: tareas abiertas e historial 
 	assert.equal(closed.account_items.length, 0);
 	assert.ok(!closed.activity.some((a) => a.item_title === 'Después de ganarla'));
 });
+
+test('meter en la PoC una tarea de su cuenta: sale del bloque de la cuenta y cuenta en el progreso', () => {
+	const poc = repo.createPoc({ name: 'MyInvestor (Fujitsu)', company: 'MyInvestor' });
+	const fup = repo.createItem({ category: 'followup', title: 'FUP con el partner', company: 'MyInvestor' });
+	assert.equal(repo.getPoc(poc.id).account_items.length, 1);
+	repo.updateItem(fup.id, { category: 'poc', poc_id: poc.id });
+	const got = repo.getPoc(poc.id);
+	assert.equal(got.account_items.length, 0);
+	assert.equal(got.poc.total, 1);
+	assert.equal(repo.getItem(fup.id).item.category, 'poc');
+});

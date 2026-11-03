@@ -1,6 +1,6 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { CornerDownRight, GripVertical, ListChecks, Send, StickyNote, Trash2 } from 'lucide-react';
+import { CornerDownRight, FlaskConical, GripVertical, ListChecks, Send, StickyNote, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useState } from 'react';
 import { useActions } from '../api/hooks';
@@ -9,7 +9,8 @@ import { openExternal } from '../lib/bridge';
 import { cx, plural } from '../lib/format';
 import { useItemOps } from '../lib/ops';
 import { useUI } from '../lib/store';
-import { ChannelIcon, Checkbox, Chip, DueChip, FlagStar, Highlight, PocTag, ReminderChip, WaitingChip, WhoChip } from './bits';
+import { ChannelIcon, Checkbox, Chip, DueChip, FlagStar, Highlight, PocDot, PocTag, ReminderChip, WaitingChip, WhoChip } from './bits';
+import { Menu, MenuItem } from './ui';
 
 export interface RowOptions {
 	showPoc?: boolean;
@@ -23,6 +24,8 @@ export interface RowOptions {
 	nested?: boolean;
 	/** Palabras buscadas que se resaltan (buscador del Inicio). */
 	highlight?: string[];
+	/** PoCs activas de la cuenta: las tareas que no están en ninguna ofrecen «Meter en la PoC». */
+	movePocs?: { id: number; name: string; color: string | null }[];
 }
 
 export function TaskRow({ item, today, options = {} }: { item: Item; today: string; options?: RowOptions }) {
@@ -54,6 +57,9 @@ export function TaskRow({ item, today, options = {} }: { item: Item; today: stri
 	const hasOpenSubs = item.sub_total - item.sub_done > 0;
 	const followable = !done && !hasOpenSubs && (item.category === 'followup' || item.category === 'poc' || !!item.parent_id);
 	const openSubs = (item.subs ?? []).filter((x) => x.state !== 'done');
+	const movePocs = !done && !item.poc_id && !item.parent_id ? (options.movePocs ?? []) : [];
+	const moveClass =
+		'hidden h-6 items-center gap-1 rounded-md px-1.5 text-[11.5px] font-medium text-accent-text group-hover:inline-flex hover:bg-accent-soft';
 	// En listas que mezclan cosas (Hoy, Próximos, Follow-ups, Cuentas), las tareas de una PoC empiezan por
 	// «PoC · nombre» para reconocerlas de un vistazo.
 	const pocPrefix = options.showPoc && item.category === 'poc' && item.poc_name;
@@ -151,6 +157,36 @@ export function TaskRow({ item, today, options = {} }: { item: Item; today: stri
 					</div>
 				</div>
 				<div className="flex shrink-0 items-center gap-1 pt-[1px]">
+					{movePocs.length === 1 && (
+						<button
+							type="button"
+							onClick={(e) => {
+								e.stopPropagation();
+								ops.moveToPoc(item, movePocs[0]);
+							}}
+							className={moveClass}
+							title={`Meter en ${movePocs[0].name}: pasa a ser tarea de la PoC y cuenta en su progreso`}
+						>
+							<FlaskConical className="size-3" /> Meter en la PoC
+						</button>
+					)}
+					{movePocs.length > 1 && (
+						<span onClick={(e) => e.stopPropagation()}>
+							<Menu
+								trigger={
+									<button type="button" className={moveClass} title="Meter en una PoC de la cuenta">
+										<FlaskConical className="size-3" /> Meter en la PoC
+									</button>
+								}
+							>
+								{movePocs.map((p) => (
+									<MenuItem key={p.id} icon={<PocDot color={p.color} />} onSelect={() => ops.moveToPoc(item, p)}>
+										{p.name}
+									</MenuItem>
+								))}
+							</Menu>
+						</span>
+					)}
 					{followable && (
 						<button
 							type="button"

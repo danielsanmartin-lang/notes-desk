@@ -240,7 +240,13 @@ export function AccountView({ name }: { name: string }) {
 
 	const mine = data.open.filter((i) => i.state === 'todo');
 	const waiting = data.open.filter((i) => i.state === 'waiting');
-	const opts = { showPoc: true, showCategory: true, sortable: false, listKey: `account-${data.key}` };
+	const opts = {
+		showPoc: true,
+		showCategory: true,
+		sortable: false,
+		listKey: `account-${data.key}`,
+		movePocs: data.pocs.filter((p) => p.status === 'active'),
+	};
 
 	return (
 		<>

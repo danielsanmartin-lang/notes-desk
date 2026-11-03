@@ -897,7 +897,11 @@ export function PocView({ id }: { id: number }) {
 							count={data.account_items.length}
 							right={<span className="text-[11.5px] text-fg-3">Fuera de la PoC: no cuenta en el progreso</span>}
 						>
-							<TaskList items={data.account_items} today={today} options={{ showCategory: true, listKey: `poc-${poc.id}-account` }} />
+							<TaskList
+								items={data.account_items}
+								today={today}
+								options={{ showCategory: true, listKey: `poc-${poc.id}-account`, movePocs: poc.status === 'active' ? [poc] : [] }}
+							/>
 						</Group>
 					</div>
 				)}
