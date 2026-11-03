@@ -36,7 +36,7 @@ export const useItem = (id: number | null) =>
 export const useCounts = () => useQuery({ queryKey: ['counts'], queryFn: () => api<Counts>('/counts') });
 export const usePocs = () => useQuery({ queryKey: ['pocs'], queryFn: () => api<Poc[]>('/pocs') });
 export const usePoc = (id: number) =>
-	useQuery({ queryKey: ['poc', id], queryFn: () => api<{ poc: Poc; contacts: PocAdmin[]; activity: Activity[] }>(`/pocs/${id}`), retry: false });
+	useQuery({ queryKey: ['poc', id], queryFn: () => api<{ poc: Poc; contacts: PocAdmin[]; activity: Activity[]; account_items: Item[] }>(`/pocs/${id}`), retry: false });
 export const useAccounts = () => useQuery({ queryKey: ['accounts'], queryFn: () => api<AccountSummary[]>('/accounts') });
 export const useAccount = (name: string) =>
 	useQuery({

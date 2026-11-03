@@ -1,4 +1,5 @@
 import {
+	Building2,
 	CalendarClock,
 	CircleCheck,
 	Pause,
@@ -103,7 +104,12 @@ export function Timeline({
 							<div className="min-w-0 flex-1 pt-0.5">
 								<div className="flex items-baseline gap-2">
 									<span className="min-w-0 flex-1 text-[12.5px] font-medium text-fg">
-										{context && <span className="text-fg-2">{context} · </span>}
+										{context && (
+											<span className="text-fg-2">
+												{a.from_account && <Building2 className="mr-1 inline size-3 -translate-y-px text-fg-3" aria-label="De la cuenta" />}
+												{context} ·{' '}
+											</span>
+										)}
 										{sub && a.kind === 'done' ? 'Subtarea completada' : d.title}
 									</span>
 									<span className="shrink-0 text-[11px] text-fg-3">{formatMoment(a.occurred_at, today)}</span>

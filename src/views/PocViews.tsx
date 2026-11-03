@@ -37,7 +37,7 @@ import { Composer } from '../components/Composer';
 import { CountryPicker } from '../components/CountryPicker';
 import { PocFilters, type PocViewMode } from '../components/PocFilters';
 import { Avatar, OpenDays, PocFacts, PocPeople } from '../components/PocDetails';
-import { DoneSection, TaskList } from '../components/TaskList';
+import { DoneSection, Group, TaskList } from '../components/TaskList';
 import { Timeline } from '../components/Timeline';
 import {
 	AutoTextarea,
@@ -888,6 +888,19 @@ export function PocView({ id }: { id: number }) {
 				<TaskList items={items} today={today} options={{ sortable: true, listKey: `poc-${poc.id}`, queryKey: ['items', 'poc', { poc: poc.id }] }} />
 				{list && (poc.status === 'active' || poc.status === 'paused') && <PocTaskSuggestions pocId={poc.id} tasks={[...items, ...list.done]} />}
 				<DoneSection items={list?.done ?? []} today={today} title="Hechas" defaultOpen />
+
+				{data.account_items.length > 0 && (
+					<div className="mt-6">
+						<Group
+							title={`Apuntado en la cuenta ${poc.company}`}
+							icon={<Building2 />}
+							count={data.account_items.length}
+							right={<span className="text-[11.5px] text-fg-3">Fuera de la PoC: no cuenta en el progreso</span>}
+						>
+							<TaskList items={data.account_items} today={today} options={{ showCategory: true, listKey: `poc-${poc.id}-account` }} />
+						</Group>
+					</div>
+				)}
 
 				<PocPeople poc={poc} people={data.contacts} kind="main" />
 				<PocPeople poc={poc} people={data.contacts} kind="admin" />

@@ -618,13 +618,30 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 	function getPoc(id) {
 		const poc = get(`${POC_SELECT} WHERE p.id = @id`, { id });
 		if (!poc) throw notFound('La PoC');
+		// Lo que se apunta en la cuenta de la PoC sin meterlo en ella (tareas y follow-ups con su empresa) también
+		// se ve en la PoC: lo abierto mientras siga viva y, en el historial, lo que pasó mientras estuvo abierta.
+		const key = poc.company ? fold(poc.company).trim() || null : null;
+		const p = { id, key, from: poc.created_at, to: poc.closed_at ?? '9999' };
+		const fromAccount = `i.poc_id IS NULL AND i.deleted_at IS NULL AND trim(fold(i.company)) = @key`;
 		const activity = all(
-			`SELECT a.*, i.title AS item_title FROM activity a LEFT JOIN items i ON i.id = a.item_id
+			`SELECT a.*, i.title AS item_title, (i.id IS NOT NULL AND i.poc_id IS NULL) AS from_account
+			 FROM activity a LEFT JOIN items i ON i.id = a.item_id
 			 WHERE a.poc_id = @id OR (i.poc_id = @id AND i.deleted_at IS NULL)
+			    OR (${fromAccount} AND a.occurred_at >= @from AND a.occurred_at <= @to)
 			 ORDER BY a.occurred_at DESC, a.id DESC LIMIT 300`,
-			{ id },
-		).map(activityOut);
-		return { poc: { ...poc, next: nextTask(id) }, contacts: pocContacts(id), activity };
+			p,
+		).map((a) => ({ ...activityOut(a), from_account: !!a.from_account }));
+		const account_items =
+			key && (poc.status === 'active' || poc.status === 'paused')
+				? withSubs(
+						all(
+							`${ITEM_SELECT} WHERE ${VISIBLE} AND i.parent_id IS NULL AND ${OPEN} AND ${fromAccount}
+							 ORDER BY (i.due_date IS NULL), i.due_date, i.sort_order, i.id`,
+							p,
+						).map(itemOut),
+					)
+				: [];
+		return { poc: { ...poc, next: nextTask(id) }, contacts: pocContacts(id), activity, account_items };
 	}
 
 	function normalizePoc(data) {

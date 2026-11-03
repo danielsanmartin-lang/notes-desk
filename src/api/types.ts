@@ -65,6 +65,8 @@ export interface Activity {
 	item_title?: string | null;
 	item_parent_id?: number | null;
 	poc_name?: string | null;
+	/** En una PoC: viene de una tarea de su cuenta que no está metida en la PoC. */
+	from_account?: boolean;
 }
 
 export interface ItemList {

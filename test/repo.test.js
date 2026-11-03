@@ -457,3 +457,34 @@ test('el historial de la PoC incluye sus tareas desde que se añaden (no las de 
 		['created', null],
 	]);
 });
+
+test('la PoC enseña lo que se apunta en su cuenta: tareas abiertas e historial mientras está abierta', () => {
+	const before = repo.createItem({ category: 'followup', title: 'Antes de la PoC', company: 'MyInvestor' });
+	repo.completeItem(before.id);
+	at('2026-10-27T10:00:00');
+	const poc = repo.createPoc({ name: 'MyInvestor (Fujitsu)', company: 'MyInvestor' });
+	at('2026-11-03T13:04:00');
+	const task = repo.createItem({ category: 'task', title: 'FUP con el partner por whatsapp', company: 'myinvestor ' });
+	repo.createItem({ category: 'task', title: 'De otra cuenta', company: 'Primax' });
+	const other = repo.createPoc({ name: 'Otra PoC', company: 'MyInvestor' });
+	repo.createItem({ category: 'poc', poc_id: other.id, title: 'De la otra PoC' });
+	const got = repo.getPoc(poc.id);
+	assert.deepEqual(got.account_items.map((i) => i.title), ['FUP con el partner por whatsapp']);
+	assert.deepEqual(
+		got.activity.map((a) => [a.kind, a.item_title ?? null, a.from_account]),
+		[
+			['created', 'FUP con el partner por whatsapp', true],
+			['created', null, false],
+		],
+	);
+	repo.completeItem(task.id);
+	assert.equal(repo.getPoc(poc.id).account_items.length, 0);
+	assert.equal(repo.getPoc(poc.id).activity[0].kind, 'done');
+	// Cerrada la PoC, lo que venga después de la cuenta ya no es suyo.
+	repo.setPocStatus(poc.id, { status: 'won' });
+	at('2026-11-10T10:00:00');
+	repo.createItem({ category: 'task', title: 'Después de ganarla', company: 'MyInvestor' });
+	const closed = repo.getPoc(poc.id);
+	assert.equal(closed.account_items.length, 0);
+	assert.ok(!closed.activity.some((a) => a.item_title === 'Después de ganarla'));
+});
