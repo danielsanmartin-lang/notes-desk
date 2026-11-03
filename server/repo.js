@@ -600,19 +600,24 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 	// Personas de la PoC: contacto principal, admins del cliente y contacto del partner (columna kind).
 	const pocContacts = (pocId) => all('SELECT * FROM poc_admins WHERE poc_id = @poc ORDER BY sort_order, id', { poc: pocId });
 
-	const nextTask = (pocId) =>
+	// Lo siguiente de la PoC: su tarea abierta más próxima o, mientras siga viva, la de su cuenta si llega antes.
+	const nextTask = (poc) =>
 		itemOut(
 			get(
-				`${ITEM_SELECT} WHERE i.poc_id = @poc AND i.parent_id IS NULL AND i.deleted_at IS NULL AND i.state <> 'done'
-				 ORDER BY (i.due_date IS NULL), i.due_date, i.sort_order, i.id LIMIT 1`,
-				{ poc: pocId },
+				`${ITEM_SELECT} WHERE i.parent_id IS NULL AND i.deleted_at IS NULL AND i.state <> 'done'
+				   AND (i.poc_id = @poc OR (@key IS NOT NULL AND i.poc_id IS NULL AND trim(fold(i.company)) = @key))
+				 ORDER BY (i.due_date IS NULL), i.due_date, (i.poc_id IS NULL), i.sort_order, i.id LIMIT 1`,
+				{
+					poc: poc.id,
+					key: poc.company && (poc.status === 'active' || poc.status === 'paused') ? fold(poc.company).trim() || null : null,
+				},
 			),
 		) ?? null;
 
 	function listPocs() {
 		return all(
 			`${POC_SELECT} ORDER BY CASE p.status WHEN 'active' THEN 0 WHEN 'paused' THEN 1 ELSE 2 END, p.sort_order, p.id`,
-		).map((p) => ({ ...p, next: nextTask(p.id) }));
+		).map((p) => ({ ...p, next: nextTask(p) }));
 	}
 
 	function getPoc(id) {
@@ -641,7 +646,7 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 						).map(itemOut),
 					)
 				: [];
-		return { poc: { ...poc, next: nextTask(id) }, contacts: pocContacts(id), activity, account_items };
+		return { poc: { ...poc, next: nextTask(poc) }, contacts: pocContacts(id), activity, account_items };
 	}
 
 	function normalizePoc(data) {

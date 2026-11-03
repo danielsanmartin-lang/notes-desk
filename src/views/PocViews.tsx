@@ -731,6 +731,7 @@ export function PocView({ id }: { id: number }) {
 	const { data: list } = useItems('poc', { poc: id });
 	const a = useActions();
 	const go = useUI((s) => s.go);
+	const select = useUI((s) => s.select);
 	const [confirmDelete, setConfirmDelete] = useState(false);
 	const [noteText, setNoteText] = useState('');
 	const poc = data?.poc;
@@ -784,6 +785,19 @@ export function PocView({ id }: { id: number }) {
 						className="no-drag min-w-0 flex-1 bg-transparent font-display text-[26px] leading-8 font-bold tracking-tight outline-none"
 					/>
 					<div className="no-drag flex items-center gap-2">
+						{poc.next && (poc.status === 'active' || poc.status === 'paused') && (
+							<button
+								type="button"
+								onClick={() => select(poc.next!.id)}
+								title={`Próximo paso${poc.next.poc_id ? '' : ` (apuntado en la cuenta ${poc.company})`}: ${poc.next.title}`}
+								className="flex h-7 max-w-[300px] min-w-0 items-center gap-1.5 rounded-lg px-2 text-[12px] hover:bg-hover"
+							>
+								<span className="shrink-0 text-fg-3">Próximo</span>
+								{!poc.next.poc_id && <Building2 className="size-3 shrink-0 text-fg-3" />}
+								<span className="min-w-0 truncate font-medium text-fg">{poc.next.title}</span>
+								{poc.next.due_date && <DueChip date={poc.next.due_date} today={today} />}
+							</button>
+						)}
 						<StatusChip poc={poc} today={today} />
 						<OpenDays poc={poc} today={today} />
 						<Menu

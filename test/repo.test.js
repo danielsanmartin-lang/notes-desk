@@ -499,3 +499,15 @@ test('meter en la PoC una tarea de su cuenta: sale del bloque de la cuenta y cue
 	assert.equal(got.poc.total, 1);
 	assert.equal(repo.getItem(fup.id).item.category, 'poc');
 });
+
+test('el siguiente paso de la PoC puede ser una tarea de su cuenta si llega antes', () => {
+	const poc = repo.createPoc({ name: 'MyInvestor (Fujitsu)', company: 'MyInvestor' });
+	repo.createItem({ category: 'poc', poc_id: poc.id, title: 'Revisar usuarios', due_date: '2026-11-10' });
+	assert.equal(repo.getPoc(poc.id).poc.next.title, 'Revisar usuarios');
+	repo.createItem({ category: 'task', title: 'Chequear si el partner ha respondido', company: 'MyInvestor', due_date: '2026-11-06' });
+	assert.equal(repo.getPoc(poc.id).poc.next.title, 'Chequear si el partner ha respondido');
+	assert.equal(repo.listPocs()[0].next.title, 'Chequear si el partner ha respondido');
+	// Con la PoC ganada, lo de la cuenta ya no es su siguiente paso.
+	repo.setPocStatus(poc.id, { status: 'won' });
+	assert.equal(repo.getPoc(poc.id).poc.next.title, 'Revisar usuarios');
+});
