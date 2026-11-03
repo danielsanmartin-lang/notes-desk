@@ -1,7 +1,7 @@
 // Campo de "nueva tarea" con lenguaje natural. Al escribir se abre debajo un menú para elegir el tipo y la
 // fecha, con lo que ha entendido del texto ya marcado.
 
-import { Bell, Building2, CalendarDays, Plus, Star } from 'lucide-react';
+import { Bell, Building2, CalendarDays, FlaskConical, Plus, Star } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -10,6 +10,7 @@ import { parseQuick } from '../../shared/quickparse.js';
 import { useActions, usePocs, useSuggestions, useToday } from '../api/hooks';
 import type { Category, Item } from '../api/types';
 import { CATEGORY_LABEL, cx, timeOf } from '../lib/format';
+import { pocsOfAccount } from '../lib/pocs';
 import { useUI } from '../lib/store';
 import { Chip, PocDot } from './bits';
 import { quickDates } from './DatePicker';
@@ -123,6 +124,7 @@ function ComposerMenu({
 	category,
 	pocId,
 	dueDate,
+	company,
 	lockCategory,
 	onType,
 	onDate,
@@ -133,6 +135,7 @@ function ComposerMenu({
 	category: Category;
 	pocId: number | null;
 	dueDate: string | null;
+	company: string | null;
 	lockCategory: boolean;
 	onType: (category: Category, pocId?: number | null) => void;
 	onDate: (date: string | null) => void;
@@ -144,6 +147,8 @@ function ComposerMenu({
 	const choices = pocs.filter((p) => p.status === 'active' || p.status === 'paused' || p.id === pocId);
 	const dates = quickDates(today).slice(0, 6);
 	const custom = dueDate && !dates.some((d) => d.value === dueDate);
+	// Si la empresa tiene una PoC activa, pregunta si va dentro (si no, se queda en la cuenta y la PoC la enseña igual).
+	const accountPocs = !lockCategory && category !== 'poc' ? pocsOfAccount(pocs, company) : [];
 	// Que pulsar un chip no quite el foco del campo (y no se cierre el menú).
 	const keep = (e: { preventDefault: () => void }) => e.preventDefault();
 
@@ -188,6 +193,20 @@ function ComposerMenu({
 								))}
 							</select>
 						)}
+					</div>
+				</div>
+			)}
+			{accountPocs.length > 0 && (
+				<div className="flex items-center gap-2">
+					<span className="w-10 shrink-0 text-[11px] text-fg-3">PoC</span>
+					<div className="flex min-w-0 flex-wrap items-center gap-1">
+						<span className="text-[12px] text-fg-2">¿Va a la PoC de {company}?</span>
+						{accountPocs.map((p) => (
+							<button key={p.id} type="button" onMouseDown={keep} onClick={() => onType('poc', p.id)} className={chipClass(false)}>
+								<FlaskConical className="size-3" />
+								Meterla en {p.name}
+							</button>
+						))}
 					</div>
 				</div>
 			)}
@@ -357,6 +376,7 @@ export function Composer({
 							category={category}
 							pocId={pocId}
 							dueDate={dueDate}
+							company={parsed.company ?? defaults.company ?? null}
 							lockCategory={lockCategory}
 							onType={(c, id) => setOverride((o) => ({ ...o, category: c, pocId: id ?? null }))}
 							onDate={(d) => setOverride((o) => ({ ...o, dueDate: d }))}
