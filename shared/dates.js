@@ -40,6 +40,16 @@ export function skipWeekend(s) {
 	return s;
 }
 
+/** n días laborables después de s (sin contar sábados ni domingos). */
+export function addBusinessDays(s, n) {
+	let d = s;
+	for (let left = n; left > 0; ) {
+		d = addDays(d, 1);
+		if (parseDate(d).getDay() % 6 !== 0) left--;
+	}
+	return d;
+}
+
 /** Día de la semana ISO: lunes = 1 … domingo = 7. */
 export const isoDow = (s) => ((parseDate(s).getDay() + 6) % 7) + 1;
 

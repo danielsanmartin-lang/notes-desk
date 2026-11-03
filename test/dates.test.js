@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+	addBusinessDays,
 	addDays,
 	daysBetween,
 	isoWeek,
@@ -47,4 +48,11 @@ test('etiquetas relativas y nivel de espera', () => {
 	assert.equal(waitingLevel(2), 'ok');
 	assert.equal(waitingLevel(5), 'warn');
 	assert.equal(waitingLevel(10), 'late');
+});
+
+test('días laborables: se saltan sábado y domingo', () => {
+	assert.equal(addBusinessDays('2026-10-29', 3), '2026-11-03'); // jueves + 3 = martes
+	assert.equal(addBusinessDays('2026-10-26', 3), '2026-10-29'); // lunes + 3 = jueves
+	assert.equal(addBusinessDays('2026-10-31', 1), '2026-11-02'); // desde el sábado, el lunes
+	assert.equal(addBusinessDays('2026-10-30', 0), '2026-10-30');
 });

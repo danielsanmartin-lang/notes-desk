@@ -2,7 +2,7 @@
 
 import { Bell, CalendarDays, X } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
-import { addDays, formatDay, isoDow, nextDow, relativeDay, toDateTimeStr } from '../../shared/dates.js';
+import { addBusinessDays, addDays, formatDay, isoDow, nextDow, relativeDay, toDateTimeStr } from '../../shared/dates.js';
 import { parseQuick } from '../../shared/quickparse.js';
 import { useToday } from '../api/hooks';
 import { cx } from '../lib/format';
@@ -13,6 +13,7 @@ export function quickDates(today: string) {
 	return [
 		{ label: 'Hoy', value: today },
 		{ label: 'Mañana', value: addDays(today, 1) },
+		{ label: 'En 3 días laborables', value: addBusinessDays(today, 3) },
 		dow < 5 ? { label: 'Este viernes', value: nextDow(today, 5) } : { label: 'Lunes', value: nextDow(today, 1) },
 		{ label: 'Próximo lunes', value: nextDow(today, 1) },
 		{ label: 'En 1 semana', value: addDays(today, 7) },

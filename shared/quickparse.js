@@ -2,12 +2,12 @@
 //   #fup / #tarea / #poc   → categoría
 //   @Cafam                 → la PoC cuyo nombre (o empresa) empieza así; @"Corporación América" con espacios
 //   !                      → destacada
-//   fechas en español      → "mañana", "pasado mañana", "el viernes", "en 3 días", "30 oct", "lunes 10:00",
+//   fechas en español      → "mañana", "pasado mañana", "el viernes", "en 3 días (laborables)", "30 oct", "lunes 10:00",
 //                            "la semana que viene"… Con hora, además, crea un recordatorio.
 // Lo que queda es el título. También detecta una empresa conocida si aparece en el texto.
 
 import * as chrono from 'chrono-node';
-import { addDays, nextDow, toDateStr, toDateTimeStr } from './dates.js';
+import { addBusinessDays, addDays, nextDow, toDateStr, toDateTimeStr } from './dates.js';
 
 const CATEGORY_TAGS = {
 	fup: 'followup',
@@ -44,6 +44,7 @@ function cut(text, index, length) {
 function customDate(text, today) {
 	const rules = [
 		[/pasado\s+mañana/i, () => addDays(today, 2)],
+		[/\ben\s+(\d+)\s+d[ií]as\s+(?:laborables|h[aá]biles)/i, (m) => addBusinessDays(today, Number(m[1]))],
 		[/(?:la\s+)?(?:semana\s+que\s+viene|pr[oó]xima\s+semana)/i, () => nextDow(today, 1)],
 		[
 			/\b(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\s+que\s+viene\b/i,

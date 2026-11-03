@@ -142,7 +142,7 @@ function ComposerMenu({
 }) {
 	const { data: pocs = [] } = usePocs();
 	const choices = pocs.filter((p) => p.status === 'active' || p.status === 'paused' || p.id === pocId);
-	const dates = quickDates(today).slice(0, 5);
+	const dates = quickDates(today).slice(0, 6);
 	const custom = dueDate && !dates.some((d) => d.value === dueDate);
 	// Que pulsar un chip no quite el foco del campo (y no se cierre el menú).
 	const keep = (e: { preventDefault: () => void }) => e.preventDefault();

@@ -51,6 +51,10 @@ test('fechas en castellano que chrono no resuelve bien', () => {
 	const r = parse('Grandvalira el jueves que viene');
 	assert.equal(r.dueDate, '2026-10-29');
 	assert.equal(r.title, 'Grandvalira');
+	const lab = parse('FUP Eurecat en 3 días laborables');
+	assert.equal(lab.dueDate, '2026-10-29');
+	assert.equal(lab.title, 'FUP Eurecat');
+	assert.equal(parseQuick('Llamar a IMQ en 3 días hábiles', { now: new Date(2026, 9, 29, 9) }).dueDate, '2026-11-03');
 });
 
 test('con hora crea recordatorio', () => {
