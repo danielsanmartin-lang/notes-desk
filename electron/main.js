@@ -7,7 +7,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { backupDaily, openDb } from '../server/db.js';
+import { backupDaily, copyDb, openDb } from '../server/db.js';
 import { startServer } from '../server/index.js';
 import { createRepo } from '../server/repo.js';
 import { themeById } from '../shared/themes.js';
@@ -21,7 +21,7 @@ const root = path.resolve(here, '..');
 // npm run dev: la UI viene de Vite (:5173) y el servidor escucha en :4100 sin token.
 const DEV = !app.isPackaged && process.env.ZD_DEV === '1';
 
-app.setName('Zepo Desk');
+app.setName('Notes Desk');
 if (!app.requestSingleInstanceLock()) app.exit(0);
 
 let mainWindow = null;
@@ -29,8 +29,19 @@ let quitting = false;
 let ctx = null;
 
 function databasePath() {
-	if (process.env.ZEPO_DESK_DB) return path.resolve(process.env.ZEPO_DESK_DB);
-	return app.isPackaged ? path.join(app.getPath('userData'), 'zepo-desk.db') : path.join(root, 'data', 'dev.db');
+	if (process.env.NOTES_DESK_DB) return path.resolve(process.env.NOTES_DESK_DB);
+	return app.isPackaged ? path.join(app.getPath('userData'), 'notes-desk.db') : path.join(root, 'data', 'dev.db');
+}
+
+// Hasta la 1.5.0 la app tenía otro nombre y guardaba sus datos en otra carpeta: la primera vez se copian aquí
+// (la carpeta antigua no se toca).
+const LEGACY_DB = ['Zepo Desk', 'zepo-desk.db'];
+async function adoptLegacyData(dbPath) {
+	if (!app.isPackaged || process.env.NOTES_DESK_DB || fs.existsSync(dbPath)) return;
+	const legacy = path.join(app.getPath('appData'), ...LEGACY_DB);
+	if (!fs.existsSync(legacy)) return;
+	fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+	await copyDb(legacy, dbPath);
 }
 
 // ── Tamaño y posición de la ventana entre sesiones ──
@@ -157,6 +168,7 @@ app.on('window-all-closed', () => {
 
 app.whenReady().then(async () => {
 	const dbPath = databasePath();
+	await adoptLegacyData(dbPath).catch((e) => console.error('Datos de la versión anterior', e));
 	const db = openDb(dbPath);
 	const repo = createRepo(db);
 	repo.housekeeping();

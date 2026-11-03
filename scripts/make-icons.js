@@ -138,7 +138,7 @@ const write = (file, buf) => {
 write(path.join(root, 'build', 'tray', 'trayTemplate.png'), png(18, render(18, trayIcon)));
 write(path.join(root, 'build', 'tray', 'trayTemplate@2x.png'), png(36, render(36, trayIcon)));
 
-const iconset = fs.mkdtempSync(path.join(os.tmpdir(), 'zepo-desk-')) + '/icon.iconset';
+const iconset = fs.mkdtempSync(path.join(os.tmpdir(), 'notes-desk-')) + '/icon.iconset';
 fs.mkdirSync(iconset);
 for (const base of [16, 32, 128, 256, 512]) {
 	fs.writeFileSync(path.join(iconset, `icon_${base}x${base}.png`), png(base, render(base, appIcon)));

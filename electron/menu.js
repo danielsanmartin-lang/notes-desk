@@ -7,15 +7,15 @@ export function buildMenu({ dev, navigate, quickCapture }) {
 		{
 			label: app.name,
 			submenu: [
-				{ role: 'about', label: 'Acerca de Zepo Desk' },
+				{ role: 'about', label: 'Acerca de Notes Desk' },
 				{ type: 'separator' },
 				{ label: 'Ajustes…', accelerator: 'Cmd+,', click: () => navigate('settings') },
 				{ type: 'separator' },
-				{ role: 'hide', label: 'Ocultar Zepo Desk' },
+				{ role: 'hide', label: 'Ocultar Notes Desk' },
 				{ role: 'hideOthers', label: 'Ocultar otros' },
 				{ role: 'unhide', label: 'Mostrar todo' },
 				{ type: 'separator' },
-				{ role: 'quit', label: 'Salir de Zepo Desk' },
+				{ role: 'quit', label: 'Salir de Notes Desk' },
 			],
 		},
 		{

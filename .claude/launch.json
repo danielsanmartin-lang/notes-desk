@@ -2,7 +2,7 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "zepo-desk-web",
+      "name": "notes-desk-web",
       "runtimeExecutable": "sh",
       "runtimeArgs": ["-c", "PORT=4100 npm run dev:web"],
       "port": 5173

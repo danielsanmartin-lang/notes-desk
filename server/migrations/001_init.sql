@@ -1,4 +1,4 @@
--- Esquema inicial de Zepo Desk. Fechas en hora local: 'YYYY-MM-DD' y 'YYYY-MM-DDTHH:MM:SS'.
+-- Esquema inicial de Notes Desk. Fechas en hora local: 'YYYY-MM-DD' y 'YYYY-MM-DDTHH:MM:SS'.
 
 CREATE TABLE pocs (
   id                 INTEGER PRIMARY KEY,

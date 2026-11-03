@@ -53,7 +53,7 @@ repo.createItem({
 	channel: 'call',
 	due_date: day(0),
 	notes: 'Si no lo coge, WhatsApp breve: dos líneas separadas, nada más.',
-	message_template: 'Cómo vais Juan.\nAquí Dani de Zepo, ¿qué tal?',
+	message_template: 'Cómo vais Juan.\nAquí Dani de Acme, ¿qué tal?',
 });
 
 at(-14);
@@ -140,7 +140,7 @@ repo.addPocAdmin(gb.id, { kind: 'partner', name: 'Angel', role: 'Preventa', emai
 repo.applyHubspotDeal(gb.id, { id: '498926522617', name: 'Global Bank (Sofistic) - Panamá - 2026', stage: 'PoC', amount: 22525, currency: 'USD', closeDate: day(96) });
 repo.createItem({ category: 'poc', poc_id: gb.id, title: 'Llamada con Lisbeth (cliente) o Angel (partner)', due_date: day(-5), channel: 'call' });
 at(-3);
-repo.createPoc({ name: 'Piloto interno', company: 'Zepo Labs', owner: 'Daniel San Martín' });
+repo.createPoc({ name: 'Piloto interno', company: 'Acme Labs', owner: 'Daniel San Martín' });
 at(-90);
 const sonae = repo.createPoc({ name: 'Sonae', company: 'Sonae', country: 'PT', owner: 'Alberto Cornejo', start_date: day(-80), amount: 18000, currency: 'EUR' });
 at(-20);

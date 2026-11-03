@@ -1,6 +1,6 @@
 @import 'tailwindcss';
 
-/* Paleta Zepo: azul eléctrico #142CD1, navy #070E34, turquesa #7BE9E4, coral #FF3B5C. */
+/* Paleta: azul eléctrico #142CD1, navy #070E34, turquesa #7BE9E4, coral #FF3B5C. */
 :root {
 	--bg: #ffffff;
 	--panel: #fbfbfd;

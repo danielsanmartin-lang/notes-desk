@@ -182,7 +182,7 @@ export function SettingsView() {
 					</div>
 				</Card>
 
-				<Card icon={<Power />} title="Inicio" description="Zepo Desk se queda en la barra de menús aunque cierres la ventana.">
+				<Card icon={<Power />} title="Inicio" description="Notes Desk se queda en la barra de menús aunque cierres la ventana.">
 					<label className="flex items-center gap-2 text-[13px]">
 						<input
 							type="checkbox"
@@ -190,7 +190,7 @@ export function SettingsView() {
 							onChange={(e) => a.saveSettings({ open_at_login: e.target.checked })}
 							className="size-4 accent-[var(--accent)]"
 						/>
-						Abrir Zepo Desk al iniciar sesión
+						Abrir Notes Desk al iniciar sesión
 					</label>
 				</Card>
 
@@ -219,7 +219,7 @@ export function SettingsView() {
 							Mostrar en Finder
 						</Button>
 					)}
-					{meta?.version && <div className="mt-3 text-[11px] text-fg-3">Zepo Desk {meta.version}</div>}
+					{meta?.version && <div className="mt-3 text-[11px] text-fg-3">Notes Desk {meta.version}</div>}
 				</Card>
 			</ViewBody>
 		</>

@@ -8,7 +8,7 @@ cd "$(dirname "$0")/.."
 
 VERSION=$(node -p "require('./package.json').version")
 TAG="v$VERSION"
-ZIP="release/Zepo-Desk-$VERSION-mac-arm64.zip"
+ZIP="release/Notes-Desk-$VERSION-mac-arm64.zip"
 NOTES="docs/releases/$TAG.md"
 
 if [ -n "$(git status --porcelain)" ]; then
@@ -25,14 +25,14 @@ npm run app:build
 
 rm -f "$ZIP"
 # ditto conserva la firma y los enlaces simbólicos del .app (zip a secas los rompe).
-ditto -c -k --sequesterRsrc --keepParent "release/mac-arm64/Zepo Desk.app" "$ZIP"
+ditto -c -k --sequesterRsrc --keepParent "release/mac-arm64/Notes Desk.app" "$ZIP"
 
-git tag -a "$TAG" -m "Zepo Desk $VERSION"
+git tag -a "$TAG" -m "Notes Desk $VERSION"
 git push origin HEAD "$TAG"
 
 if [ -f "$NOTES" ]; then
-	gh release create "$TAG" "$ZIP" --title "Zepo Desk $VERSION" --notes-file "$NOTES"
+	gh release create "$TAG" "$ZIP" --title "Notes Desk $VERSION" --notes-file "$NOTES"
 else
-	gh release create "$TAG" "$ZIP" --title "Zepo Desk $VERSION" --generate-notes
+	gh release create "$TAG" "$ZIP" --title "Notes Desk $VERSION" --generate-notes
 fi
 echo "Publicada $TAG"

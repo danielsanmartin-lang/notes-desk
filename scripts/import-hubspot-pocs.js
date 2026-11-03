@@ -1,7 +1,7 @@
-// Importa (o actualiza) en Zepo Desk las PoCs que vienen de HubSpot: un JSON con los deals en etapa PoC,
+// Importa (o actualiza) en Notes Desk las PoCs que vienen de HubSpot: un JSON con los deals en etapa PoC,
 // su empresa y sus tareas abiertas, sacado de HubSpot con Claude (conector) o a mano.
 //   ELECTRON_RUN_AS_NODE=1 electron scripts/import-hubspot-pocs.js deals.json [ruta.db]
-// Sin ruta usa la base real (~/Library/Application Support/Zepo Desk/zepo-desk.db). Se puede repetir:
+// Sin ruta usa la base real (~/Library/Application Support/Notes Desk/notes-desk.db). Se puede repetir:
 // una PoC se reconoce por su deal de HubSpot y una tarea por su título dentro de la PoC.
 //
 // Formato del JSON:
@@ -29,7 +29,7 @@ if (!file) {
 	console.error('Uso: electron scripts/import-hubspot-pocs.js deals.json [ruta.db]');
 	process.exit(1);
 }
-const dbPath = dbArg ?? process.env.ZEPO_DESK_DB ?? path.join(os.homedir(), 'Library', 'Application Support', 'Zepo Desk', 'zepo-desk.db');
+const dbPath = dbArg ?? process.env.NOTES_DESK_DB ?? path.join(os.homedir(), 'Library', 'Application Support', 'Notes Desk', 'notes-desk.db');
 const data = JSON.parse(fs.readFileSync(file, 'utf8'));
 const repo = createRepo(openDb(dbPath));
 const localDate = (iso) => (iso ? toDateStr(new Date(iso)) : null);

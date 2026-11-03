@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { beforeEach, test } from 'node:test';
-import { migrate, openDb } from '../server/db.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { copyDb, migrate, openDb } from '../server/db.js';
 import { createRepo } from '../server/repo.js';
 
 let clock;
@@ -184,7 +187,7 @@ test('ajustes validados y con valores por defecto', () => {
 	assert.equal(repo.setSettings({ fup_days: 5, open_at_login: true }).fup_days, 5);
 	assert.throws(() => repo.setSettings({ fup_days: 0 }), /1 a 60/);
 	assert.throws(() => repo.setSettings({ digest_time: '25:00' }), /Hora/);
-	assert.deepEqual([repo.getSettings().appearance, repo.getSettings().theme], ['system', 'zepo']);
+	assert.deepEqual([repo.getSettings().appearance, repo.getSettings().theme], ['system', 'electric']);
 	const s = repo.setSettings({ appearance: 'dark', theme: 'oceano' });
 	assert.deepEqual([s.appearance, s.theme], ['dark', 'oceano']);
 	assert.throws(() => repo.setSettings({ appearance: 'sepia' }), /Aspecto/);
@@ -550,4 +553,22 @@ test('migración 007: lo ya apuntado que nombra al partner queda marcado como de
 		[a, b, c].map((i) => db.prepare('SELECT audience FROM items WHERE id = ?').get(i.id).audience),
 		['partner', 'partner', null],
 	);
+});
+
+test('los datos de la versión anterior se copian con lo que haya en el WAL, y el tema antiguo se adapta', async () => {
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'notes-desk-test-'));
+	const oldDb = openDb(path.join(dir, 'old.db'));
+	const old = createRepo(oldDb, { now: () => clock });
+	old.createItem({ category: 'task', title: 'Sigue aquí' });
+	oldDb.prepare(`INSERT OR REPLACE INTO settings (key, value) VALUES ('theme', '"zepo"')`).run();
+	await copyDb(path.join(dir, 'old.db'), path.join(dir, 'new.db'));
+	oldDb.close();
+	const fresh = new (oldDb.constructor)(path.join(dir, 'new.db'));
+	fresh.pragma('user_version = 7');
+	migrate(fresh);
+	const r = createRepo(fresh, { now: () => clock });
+	assert.deepEqual(r.listItems('tasks').items.map((i) => i.title), ['Sigue aquí']);
+	assert.equal(r.getSettings().theme, 'electric');
+	fresh.close();
+	fs.rmSync(dir, { recursive: true, force: true });
 });

@@ -8,9 +8,9 @@ import { startServer } from './index.js';
 import { createRepo } from './repo.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const dbPath = process.env.ZEPO_DESK_DB ?? path.join(root, 'data', 'dev.db');
+const dbPath = process.env.NOTES_DESK_DB ?? path.join(root, 'data', 'dev.db');
 const repo = createRepo(openDb(dbPath));
 repo.housekeeping();
 
 const { port } = await startServer({ repo, port: Number(process.env.PORT ?? 4100), meta: { dbPath, dev: true } });
-console.log(`Zepo Desk API en http://127.0.0.1:${port} · DB ${dbPath}`);
+console.log(`Notes Desk API en http://127.0.0.1:${port} · DB ${dbPath}`);

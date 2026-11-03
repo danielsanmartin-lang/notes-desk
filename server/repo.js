@@ -45,7 +45,7 @@ export const DEFAULT_SETTINGS = {
 	digest_last: '',
 	hubspot_portal_id: '',
 	appearance: 'system', // system | light | dark
-	theme: 'zepo',
+	theme: 'electric',
 };
 
 // Campos que guarda un toque o una respuesta para poder deshacerlos.

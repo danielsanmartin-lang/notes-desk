@@ -45,7 +45,7 @@ export function startNotifications({ repo, onChange, actions }) {
 			repo.markNotified(item.id);
 			show({
 				title: item.title,
-				body: [item.poc_name ?? item.company, item.contact].filter(Boolean).join(' · ') || 'Recordatorio de Zepo Desk',
+				body: [item.poc_name ?? item.company, item.contact].filter(Boolean).join(' · ') || 'Recordatorio de Notes Desk',
 				onClick: () => actions.openItem(item.id),
 			});
 		}

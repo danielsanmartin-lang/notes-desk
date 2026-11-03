@@ -1,9 +1,9 @@
 {
-  "name": "zepo-desk",
-  "productName": "Zepo Desk",
+  "name": "notes-desk",
+  "productName": "Notes Desk",
   "private": true,
   "version": "1.5.0",
-  "description": "Follow-ups, tareas y PoCs de Zepo en una app de escritorio.",
+  "description": "Local-first desktop app for notes, tasks, follow-ups and projects.",
   "author": "Daniel San Martín",
   "type": "module",
   "main": "electron/main.js",
@@ -17,13 +17,13 @@
     "postinstall": "electron-builder install-app-deps",
     "app:dev": "npm run build && electron .",
     "app:build": "npm run build && electron-builder --mac --arm64 --dir && npm run app:sign",
-    "app:sign": "codesign --force --deep --sign - \"release/mac-arm64/Zepo Desk.app\"",
+    "app:sign": "codesign --force --deep --sign - \"release/mac-arm64/Notes Desk.app\"",
     "release": "bash scripts/release.sh",
-    "app:install": "npm run app:build && osascript -e 'if application \"Zepo Desk\" is running then quit app \"Zepo Desk\"' && sleep 1 ; rm -rf \"/Applications/Zepo Desk.app\" && cp -a \"release/mac-arm64/Zepo Desk.app\" /Applications/"
+    "app:install": "npm run app:build && osascript -e 'if application \"Notes Desk\" is running then quit app \"Notes Desk\"' && sleep 1 ; rm -rf \"/Applications/Notes Desk.app\" && cp -a \"release/mac-arm64/Notes Desk.app\" /Applications/"
   },
   "build": {
-    "appId": "app.zepo.desk",
-    "productName": "Zepo Desk",
+    "appId": "app.notesdesk",
+    "productName": "Notes Desk",
     "directories": {
       "output": "release",
       "buildResources": "build"

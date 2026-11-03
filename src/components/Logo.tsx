@@ -1,4 +1,4 @@
-// Marca de Zepo Desk: cuadrado navy → azul Zepo con un check y un punto turquesa (el "toque").
+// Marca de Notes Desk: cuadrado navy → azul eléctrico con un check y un punto turquesa (el "toque").
 export function Logo({ className }: { className?: string }) {
 	return (
 		<svg viewBox="0 0 32 32" className={className} aria-hidden="true">

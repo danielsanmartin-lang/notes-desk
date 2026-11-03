@@ -242,7 +242,7 @@ export function FollowUpsView() {
 				<Composer defaults={{ category: 'followup' }} placeholder="Nuevo follow-up… (prueba «Llamar a Juan Caubet mañana»)" />
 				{!isLoading && !items.length && (
 					<EmptyState icon={<Send />} title="Sin follow-ups abiertos">
-						Apunta a quién tienes que perseguir. Cada vez que le escribas, registra el toque y Zepo Desk te recordará cuándo volver.
+						Apunta a quién tienes que perseguir. Cada vez que le escribas, registra el toque y Notes Desk te recordará cuándo volver.
 					</EmptyState>
 				)}
 				{mine.length > 0 && (

@@ -106,7 +106,7 @@ export function Sidebar() {
 		<nav className="sidebar-surface flex h-full w-[232px] shrink-0 flex-col border-r border-line bg-sidebar">
 			<div className={cx('drag flex h-12 shrink-0 items-center gap-2 px-4', isElectron && 'justify-end')}>
 				<Logo className="size-5" />
-				<span className="font-display text-[13px] font-semibold tracking-tight">Zepo Desk</span>
+				<span className="font-display text-[13px] font-semibold tracking-tight">Notes Desk</span>
 			</div>
 
 			<div className="px-3 pb-2">

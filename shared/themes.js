@@ -25,8 +25,8 @@ const mode = ({ bg, panel, sidebar, raised, fg, fg2, fg3, ink, accent, accentFg,
 
 export const THEMES = [
 	{
-		id: 'zepo',
-		name: 'Zepo',
+		id: 'electric',
+		name: 'Eléctrico',
 		hint: 'Azul eléctrico',
 		light: mode({
 			bg: '#ffffff', panel: '#fbfbfd', sidebar: '#f3f4f9', raised: '#ffffff',

@@ -9,7 +9,7 @@ export function createTray({ repo, iconPath, actions }) {
 	const image = nativeImage.createFromPath(iconPath);
 	image.setTemplateImage(true);
 	const tray = new Tray(image);
-	tray.setToolTip('Zepo Desk');
+	tray.setToolTip('Notes Desk');
 
 	function refresh() {
 		const { items } = repo.listItems('today');
@@ -30,9 +30,9 @@ export function createTray({ repo, iconPath, actions }) {
 				...(items.length > list.length ? [{ label: `y ${items.length - list.length} más…`, click: () => actions.showMain('today') }] : []),
 				{ type: 'separator' },
 				{ label: 'Nueva tarea…', accelerator: settings.shortcut || undefined, click: actions.quickCapture },
-				{ label: 'Abrir Zepo Desk', click: () => actions.showMain() },
+				{ label: 'Abrir Notes Desk', click: () => actions.showMain() },
 				{ type: 'separator' },
-				{ label: 'Salir de Zepo Desk', click: actions.quit },
+				{ label: 'Salir de Notes Desk', click: actions.quit },
 			]),
 		);
 	}
