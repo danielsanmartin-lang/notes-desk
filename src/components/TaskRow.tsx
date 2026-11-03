@@ -174,7 +174,8 @@ export function TaskRow({ item, today, options = {} }: { item: Item; today: stri
 							className={moveClass}
 							title={`Meter en ${movePocs[0].name}: pasa a ser tarea de la PoC y cuenta en su progreso`}
 						>
-							<FlaskConical className="size-3" /> Meter en la PoC
+							<FlaskConical className="size-3" />
+							<span className="hidden lg:inline">Meter en la PoC</span>
 						</button>
 					)}
 					{movePocs.length > 1 && (
@@ -182,7 +183,8 @@ export function TaskRow({ item, today, options = {} }: { item: Item; today: stri
 							<Menu
 								trigger={
 									<button type="button" className={moveClass} title="Meter en una PoC de la cuenta">
-										<FlaskConical className="size-3" /> Meter en la PoC
+										<FlaskConical className="size-3" />
+							<span className="hidden lg:inline">Meter en la PoC</span>
 									</button>
 								}
 							>
