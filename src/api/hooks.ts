@@ -116,6 +116,8 @@ export function useActions() {
 			reply: (id: number, body: { body?: string; complete?: boolean }) =>
 				post<{ item: Item; activity_id: number }>(`/items/${id}/reply`, body),
 			note: (id: number, body: string) => post<Activity>(`/items/${id}/note`, { body }),
+			/** Nota para el historial de una PoC o, sin PoC, de una empresa. */
+			addNote: (data: { body: string; poc_id?: number | null; company?: string | null }) => post<Activity>('/notes', data),
 			remove: (id: number) => post<Item>(`/items/${id}/delete`),
 			restore: (id: number) => post<Item>(`/items/${id}/restore`),
 			purge: (id: number) => run(api(`/items/${id}`, { method: 'DELETE' })),

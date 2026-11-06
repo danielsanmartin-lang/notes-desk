@@ -5,7 +5,6 @@ import { motion } from 'motion/react';
 import { useState } from 'react';
 import { useActions, usePocs } from '../api/hooks';
 import type { Item } from '../api/types';
-import { openExternal } from '../lib/bridge';
 import { cx, plural } from '../lib/format';
 import { useItemOps } from '../lib/ops';
 import { partnerOf } from '../lib/pocs';
@@ -143,10 +142,9 @@ export function TaskRow({ item, today, options = {} }: { item: Item; today: stri
 							company={item.company}
 							contact={item.contact}
 							highlight={options.highlight}
-							onCompany={() =>
-								item.account_hubspot_url ? openExternal(item.account_hubspot_url) : item.company && go({ kind: 'account', name: item.company })
-							}
-							companyTitle={item.account_hubspot_url ? `Abrir ${item.company} en HubSpot` : `Ver la cuenta ${item.company} (sin enlace de HubSpot: añádelo en Cuentas)`}
+							// Lleva a la ficha de la cuenta; el enlace de HubSpot está dentro de ella.
+							onCompany={() => item.company && go({ kind: 'account', name: item.company })}
+							companyTitle={`Ver la ficha de ${item.company}`}
 						/>
 						{item.channel && (
 							<span className="text-fg-3" title="Canal">

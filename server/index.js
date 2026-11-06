@@ -69,6 +69,9 @@ export function startServer({ repo, port = 0, token = null, staticDir = null, me
 	r.post('/items/:id/touch', (req, res) => res.json(repo.touchItem(id(req), req.body ?? {})));
 	r.post('/items/:id/reply', (req, res) => res.json(repo.replyItem(id(req), req.body ?? {})));
 	r.post('/items/:id/note', (req, res) => res.status(201).json(repo.addNote({ item_id: id(req), body: req.body?.body })));
+	r.post('/notes', (req, res) =>
+		res.status(201).json(repo.addNote({ poc_id: Number(req.body?.poc_id) || null, company: req.body?.company, body: req.body?.body })),
+	);
 	r.post('/items/:id/delete', (req, res) => res.json(repo.deleteItem(id(req))));
 	r.post('/items/:id/restore', (req, res) => res.json(repo.restoreItem(id(req))));
 	r.delete('/activity/:id', (req, res) => res.json({ item: repo.deleteActivity(id(req)) }));

@@ -35,6 +35,13 @@ test('etiquetas de categoría, PoC y destacada', () => {
 	assert.equal(t.dueDate, null);
 });
 
+test('#nota: es una nota y guarda el texto con sus fechas', () => {
+	const r = parse('Firman el viernes, dice Catalina de BCI #nota');
+	assert.equal(r.category, 'note');
+	assert.equal(r.text, 'Firman el viernes, dice Catalina de BCI');
+	assert.equal(r.company, 'BCI');
+});
+
 test('PoC con espacios, por empresa y sin acentos', () => {
 	assert.equal(parse('Llamar a Matías @"Corporación América"').pocId, 2);
 	assert.equal(parse('Llamar a Matías @aeropuertos').pocId, 2);

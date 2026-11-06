@@ -1,5 +1,5 @@
 // Parser de la captura rápida: "FUP Catalina BCI el viernes #fup @Cafam !"
-//   #fup / #tarea / #poc   → categoría
+//   #fup / #tarea / #poc   → categoría; #nota → una nota para el historial (no es una tarea)
 //   @Cafam                 → la PoC cuyo nombre (o empresa) empieza así; @"Corporación América" con espacios
 //   !                      → destacada
 //   fechas en español      → "mañana", "pasado mañana", "el viernes", "en 3 días (laborables)", "30 oct", "lunes 10:00",
@@ -18,6 +18,8 @@ const CATEGORY_TAGS = {
 	task: 'task',
 	todo: 'task',
 	poc: 'poc',
+	nota: 'note',
+	note: 'note',
 };
 
 const FUP_START = /^\s*(fup|follow[- ]?up|seguimiento)\b/i;
@@ -73,6 +75,8 @@ export function parseQuick(text, { now = new Date(), pocs = [], companies = [] }
 		remindAt: null,
 		flagged: false,
 		company: null,
+		// El texto sin etiquetas pero con sus fechas: lo que se guarda si es una nota.
+		text: '',
 	};
 	let rest = ` ${text ?? ''} `;
 	const today = toDateStr(now);
@@ -103,6 +107,8 @@ export function parseQuick(text, { now = new Date(), pocs = [], companies = [] }
 		out.flagged = true;
 		return sp;
 	});
+
+	out.text = rest.replace(/\s+/g, ' ').trim();
 
 	const custom = customDate(rest, today);
 	if (custom) {

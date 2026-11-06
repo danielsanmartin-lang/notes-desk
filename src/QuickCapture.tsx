@@ -33,10 +33,10 @@ export function QuickCapture() {
 	}, []);
 
 	const submit = async (open: boolean) => {
-		const item = await create(parsed, { category }).catch(() => null);
-		if (!item) return;
+		const res = await create(parsed, { category }).catch(() => null);
+		if (!res) return;
 		setSaved(true);
-		if (open) zd?.openItem(item.id);
+		if (open && 'item' in res) zd?.openItem(res.item.id);
 		setTimeout(() => zd?.closeQuick(), open ? 0 : 450);
 	};
 
@@ -87,7 +87,7 @@ export function QuickCapture() {
 						))}
 					</div>
 					<div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
-						<ParsedChips parsed={{ ...parsed, category: null }} defaults={{ category }} today={today} />
+						<ParsedChips parsed={{ ...parsed, category: parsed.category === 'note' ? 'note' : null }} defaults={{ category }} today={today} />
 					</div>
 					<div className="flex shrink-0 items-center gap-1.5 text-[11px] text-fg-3">
 						<Kbd>Tab</Kbd> tipo

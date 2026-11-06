@@ -64,6 +64,8 @@ export interface Activity {
 	body: string | null;
 	meta: { from?: string; to?: string; until?: string | null; next_date?: string | null } | null;
 	occurred_at: string;
+	/** Notas sueltas de una empresa (sin tarea ni PoC): a qué cuenta van. */
+	company?: string | null;
 	item_title?: string | null;
 	item_parent_id?: number | null;
 	poc_name?: string | null;

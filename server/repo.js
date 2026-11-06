@@ -143,12 +143,12 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 		return p;
 	}
 
-	function logActivity({ item_id = null, poc_id = null, kind, channel = null, body = null, meta = null, at }) {
+	function logActivity({ item_id = null, poc_id = null, company = null, kind, channel = null, body = null, meta = null, at }) {
 		return Number(
 			run(
-				`INSERT INTO activity (item_id, poc_id, kind, channel, body, meta, occurred_at)
-				 VALUES (@item_id, @poc_id, @kind, @channel, @body, @meta, @at)`,
-				{ item_id, poc_id, kind, channel, body: emptyToNull(body), meta: meta ? JSON.stringify(meta) : null, at: at ?? ts() },
+				`INSERT INTO activity (item_id, poc_id, company, kind, channel, body, meta, occurred_at)
+				 VALUES (@item_id, @poc_id, @company, @kind, @channel, @body, @meta, @at)`,
+				{ item_id, poc_id, company, kind, channel, body: emptyToNull(body), meta: meta ? JSON.stringify(meta) : null, at: at ?? ts() },
 			).lastInsertRowid,
 		);
 	}
@@ -475,12 +475,14 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 		})();
 	}
 
-	function addNote({ item_id = null, poc_id = null, body }) {
+	/** Nota en el historial de una tarea, de una PoC o, sin ninguna de las dos, de una empresa (su cuenta). */
+	function addNote({ item_id = null, poc_id = null, company = null, body }) {
 		if (!emptyToNull(body)) throw bad('La nota está vacía');
+		company = item_id ? null : (emptyToNull(company)?.slice(0, 200) ?? null);
 		if (item_id) requireItem(item_id);
 		else if (poc_id) requirePoc(poc_id);
-		else throw bad('Falta la tarea o la PoC');
-		const id = logActivity({ item_id, poc_id, kind: 'note', body });
+		else if (!company) throw bad('Falta la empresa, la tarea o la PoC de la nota');
+		const id = logActivity({ item_id, poc_id, company, kind: 'note', body });
 		return activityOut(get('SELECT * FROM activity WHERE id = @id', { id }));
 	}
 
@@ -979,7 +981,8 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 		const companies = all(
 			`SELECT company AS value, COUNT(*) AS n FROM (
 			   SELECT company FROM items WHERE company IS NOT NULL AND deleted_at IS NULL
-			   UNION ALL SELECT company FROM pocs WHERE company IS NOT NULL)
+			   UNION ALL SELECT company FROM pocs WHERE company IS NOT NULL
+			   UNION ALL SELECT company FROM activity WHERE company IS NOT NULL)
 			 GROUP BY lower(company) ORDER BY n DESC, value LIMIT 300`,
 		).map((r) => r.value);
 		const contacts = all(
@@ -1004,7 +1007,8 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 		const rows = all(
 			`SELECT trim(${ACCOUNT_EXPR}) AS acc, COUNT(*) AS n FROM items i LEFT JOIN pocs p ON p.id = i.poc_id
 			 WHERE i.deleted_at IS NULL AND ${ACCOUNT_EXPR} IS NOT NULL GROUP BY acc
-			 UNION ALL SELECT trim(company) AS acc, 1 AS n FROM pocs WHERE company IS NOT NULL`,
+			 UNION ALL SELECT trim(company) AS acc, 1 AS n FROM pocs WHERE company IS NOT NULL
+			 UNION ALL SELECT trim(company) AS acc, 1 AS n FROM activity WHERE company IS NOT NULL`,
 		);
 		const spellings = new Map(); // cuenta → (forma de escribirla → veces)
 		for (const r of rows) {
@@ -1068,7 +1072,7 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 			if (p.company) entry(fold(p.company).trim()).pocs.push(pick(p, ['id', 'name', 'color', 'status']));
 		}
 		const acts = all(
-			`SELECT fold(coalesce(nullif(i.company, ''), pi.company, pa.company)) AS k, max(a.occurred_at) AS last,
+			`SELECT fold(coalesce(nullif(i.company, ''), pi.company, pa.company, a.company)) AS k, max(a.occurred_at) AS last,
 			        SUM(a.kind = 'touch' AND a.occurred_at >= @since) AS touches
 			 FROM activity a LEFT JOIN items i ON i.id = a.item_id
 			 LEFT JOIN pocs pi ON pi.id = i.poc_id LEFT JOIN pocs pa ON pa.id = a.poc_id
@@ -1125,7 +1129,7 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 				contacts.set(k, { name: a.name, email: a.email, role: a.role, poc: poc.name, kind: a.kind, partner: poc.partner, tasks: prev?.tasks ?? 0 });
 			}
 		}
-		const scope = `(fold(coalesce(nullif(i.company, ''), pi.company)) = @key OR fold(pa.company) = @key)`;
+		const scope = `(fold(coalesce(nullif(i.company, ''), pi.company)) = @key OR fold(pa.company) = @key OR trim(fold(a.company)) = @key)`;
 		const activity = all(
 			`SELECT a.*, i.title AS item_title, coalesce(pa.name, pi.name) AS poc_name
 			 FROM activity a LEFT JOIN items i ON i.id = a.item_id

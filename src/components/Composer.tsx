@@ -1,14 +1,14 @@
-// Campo de "nueva tarea" con lenguaje natural. Al escribir se abre debajo un menú para elegir el tipo y la
-// fecha, con lo que ha entendido del texto ya marcado.
+// Campo de "nueva tarea" con lenguaje natural. Al escribir se abre debajo un menú por filas (tipo, empresa,
+// PoC y fecha) con lo que ha entendido del texto ya marcado.
 
-import { Bell, Building2, CalendarDays, FlaskConical, Plus, Star } from 'lucide-react';
+import { Bell, Building2, CalendarDays, Plus, Star, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { formatDay, relativeDay } from '../../shared/dates.js';
-import { parseQuick } from '../../shared/quickparse.js';
+import { fold, parseQuick } from '../../shared/quickparse.js';
 import { useActions, usePocs, useSuggestions, useToday } from '../api/hooks';
-import type { Category, Item } from '../api/types';
+import type { Activity, Category, Item } from '../api/types';
 import { CATEGORY_LABEL, cx, timeOf } from '../lib/format';
 import { pocsOfAccount } from '../lib/pocs';
 import { useUI } from '../lib/store';
@@ -22,9 +22,12 @@ export interface ComposerDefaults {
 	company?: string;
 }
 
+/** Lo que se apunta: una tarea, un follow-up o una nota para el historial (la PoC va aparte). */
+export type Kind = 'task' | 'followup' | 'note';
+
 export interface Parsed {
 	title: string;
-	category: Category | null;
+	category: Category | 'note' | null;
 	pocId: number | null;
 	pocName: string | null;
 	pocColor: string | null;
@@ -32,7 +35,11 @@ export interface Parsed {
 	remindAt: string | null;
 	flagged: boolean;
 	company: string | null;
+	/** El texto sin etiquetas pero con sus fechas: el cuerpo si es una nota. */
+	text: string;
 }
+
+export type Created = { item: Item } | { note: Activity; where: string };
 
 export function useQuickParse(text: string): Parsed {
 	const { data: pocs = [] } = usePocs();
@@ -50,15 +57,28 @@ export function useQuickParse(text: string): Parsed {
 
 export function useCreateFromParsed() {
 	const a = useActions();
-	return async (parsed: Parsed, defaults: ComposerDefaults): Promise<Item | null> => {
+	return async (parsed: Parsed, defaults: ComposerDefaults): Promise<Created | null> => {
 		const category = parsed.category ?? defaults.category;
+		if (category === 'note') {
+			// Una nota no es una tarea: va al historial de la PoC o, sin PoC, al de la empresa.
+			const body = parsed.text || parsed.title;
+			const company = parsed.company ?? defaults.company ?? null;
+			const pocId = parsed.pocId ?? defaults.poc_id ?? null;
+			if (!body) return null;
+			if (!company && !pocId) {
+				toast.error('¿De qué empresa es la nota? Elígela en el menú');
+				return null;
+			}
+			const note = await a.addNote({ body, poc_id: pocId, company });
+			return { note, where: (pocId && parsed.pocName) || company || 'la PoC' };
+		}
 		const pocId = parsed.pocId ?? (category === 'poc' ? defaults.poc_id : undefined);
 		if (!parsed.title) return null;
 		if (category === 'poc' && !pocId) {
 			toast.error('¿De qué PoC? Escríbela con @, por ejemplo @Cafam');
 			return null;
 		}
-		return a.create({
+		const item = await a.create({
 			title: parsed.title,
 			category,
 			poc_id: pocId ?? null,
@@ -67,6 +87,7 @@ export function useCreateFromParsed() {
 			flagged: parsed.flagged,
 			company: parsed.company ?? defaults.company ?? null,
 		});
+		return { item };
 	};
 }
 
@@ -75,7 +96,7 @@ export function ParsedChips({ parsed, defaults, today }: { parsed: Parsed; defau
 	if (parsed.category && parsed.category !== defaults.category && parsed.category !== 'poc')
 		chips.push(
 			<Chip key="cat" tone="accent">
-				{CATEGORY_LABEL[parsed.category]}
+				{parsed.category === 'note' ? 'Nota' : CATEGORY_LABEL[parsed.category]}
 			</Chip>,
 		);
 	if (parsed.pocName)
@@ -111,7 +132,15 @@ export function ParsedChips({ parsed, defaults, today }: { parsed: Parsed; defau
 	return <>{chips}</>;
 }
 
-type Override = { category?: Category; pocId?: number | null; dueDate?: string | null };
+type Override = { kind?: Kind; pocId?: number | null; dueDate?: string | null; company?: string | null };
+
+const KINDS: { value: Kind; label: string }[] = [
+	{ value: 'followup', label: 'Follow-up' },
+	{ value: 'task', label: 'Tarea' },
+	{ value: 'note', label: 'Nota' },
+];
+/** PoCs que se ven como botones; el resto, en «Otra PoC…». */
+const POC_CHIPS = 5;
 
 const chipClass = (on: boolean) =>
 	cx(
@@ -119,100 +148,225 @@ const chipClass = (on: boolean) =>
 		on ? 'bg-accent text-accent-fg' : 'bg-hover text-fg-2 hover:text-fg',
 	);
 
-/** Menú bajo el campo: tipo (tarea, follow-up o PoC) y fecha, con lo escrito ya preseleccionado. */
+// Que pulsar un botón del menú no quite el foco del campo (y no se cierre el menú).
+const keep = (e: { preventDefault: () => void }) => e.preventDefault();
+
+function Row({ label, children }: { label: string; children: ReactNode }) {
+	return (
+		<div className="flex items-start gap-2">
+			<span className="w-12 shrink-0 pt-[5px] text-[11px] text-fg-3">{label}</span>
+			<div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">{children}</div>
+		</div>
+	);
+}
+
+/** Empresa: escribe para buscar entre las que ya hay o crear una nueva con ese nombre. */
+function CompanyPicker({ value, onChange, refocus }: { value: string | null; onChange: (v: string | null) => void; refocus: () => void }) {
+	const { data: sugg } = useSuggestions();
+	const [editing, setEditing] = useState(false);
+	const [q, setQ] = useState('');
+	const [active, setActive] = useState(0);
+	const [inputFocused, setInputFocused] = useState(false);
+	const inputRef = useRef<HTMLInputElement>(null);
+
+	useEffect(() => {
+		if (editing) inputRef.current?.focus();
+	}, [editing]);
+
+	const companies = sugg?.companies ?? [];
+	const fq = fold(q).trim();
+	const matches = (
+		fq
+			? companies.filter((c) => fold(c).includes(fq)).sort((a, b) => Number(fold(b).startsWith(fq)) - Number(fold(a).startsWith(fq)))
+			: companies
+	)
+		.filter((c) => fold(c).trim() !== fold(value ?? '').trim())
+		.slice(0, 5);
+	const exists = companies.some((c) => fold(c).trim() === fq);
+	const options = [...matches.map((c) => ({ value: c, create: false })), ...(fq && !exists ? [{ value: q.trim(), create: true }] : [])];
+	const current = Math.min(active, options.length - 1);
+
+	const pick = (v: string) => {
+		onChange(v);
+		setEditing(false);
+		setQ('');
+		setActive(0);
+		refocus();
+	};
+	const cancel = () => {
+		setEditing(false);
+		setQ('');
+		refocus();
+	};
+
+	if (value && !editing) {
+		return (
+			<span className={cx(chipClass(true), 'pr-0.5')}>
+				<button type="button" onMouseDown={keep} onClick={() => setEditing(true)} className="inline-flex items-center gap-1" title="Cambiar la empresa">
+					<Building2 className="size-3" />
+					{value}
+				</button>
+				<button
+					type="button"
+					onMouseDown={keep}
+					onClick={() => onChange(null)}
+					className="ml-0.5 inline-flex size-5 items-center justify-center rounded opacity-70 hover:opacity-100"
+					title="Sin empresa"
+				>
+					<X className="size-3" />
+				</button>
+			</span>
+		);
+	}
+
+	return (
+		<>
+			<input
+				ref={inputRef}
+				value={q}
+				onChange={(e) => {
+					setQ(e.target.value);
+					setActive(0);
+				}}
+				onFocus={() => setInputFocused(true)}
+				onBlur={() => {
+					setInputFocused(false);
+					if (value) setEditing(false);
+				}}
+				onKeyDown={(e) => {
+					if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+						e.preventDefault();
+						if (options.length) setActive((current + (e.key === 'ArrowDown' ? 1 : options.length - 1)) % options.length);
+					}
+					if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+						e.preventDefault();
+						if (options[current]) pick(options[current].value);
+						else cancel();
+					}
+					if (e.key === 'Escape') {
+						e.preventDefault();
+						e.stopPropagation();
+						cancel();
+					}
+				}}
+				placeholder="Buscar o crear empresa…"
+				className="h-6 w-44 rounded-md bg-hover px-2 text-[12px] text-fg outline-none placeholder:text-fg-3 focus:ring-2 focus:ring-accent/40"
+			/>
+			{options.map((o, i) => (
+				<button
+					key={`${o.create}-${o.value}`}
+					type="button"
+					onMouseDown={keep}
+					onClick={() => pick(o.value)}
+					className={cx(
+						o.create ? 'inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-2 text-[12px] font-medium text-accent-text hover:bg-accent-soft' : chipClass(false),
+						inputFocused && i === current && 'ring-2 ring-accent/40',
+					)}
+				>
+					{o.create ? <Plus className="size-3" /> : <Building2 className="size-3 text-fg-3" />}
+					{o.create ? `Crear «${o.value}»` : o.value}
+				</button>
+			))}
+		</>
+	);
+}
+
+/** Menú bajo el campo, en filas: tipo, empresa, PoC y fecha, con lo escrito ya preseleccionado. */
 function ComposerMenu({
-	category,
+	kind,
 	pocId,
 	dueDate,
 	company,
 	lockCategory,
-	onType,
+	onKind,
+	onCompany,
+	onPoc,
 	onDate,
 	parsed,
 	today,
 	refocus,
 }: {
-	category: Category;
+	kind: Kind;
 	pocId: number | null;
 	dueDate: string | null;
 	company: string | null;
 	lockCategory: boolean;
-	onType: (category: Category, pocId?: number | null) => void;
+	onKind: (kind: Kind) => void;
+	onCompany: (company: string | null) => void;
+	onPoc: (pocId: number | null) => void;
 	onDate: (date: string | null) => void;
 	parsed: Parsed;
 	today: string;
 	refocus: () => void;
 }) {
 	const { data: pocs = [] } = usePocs();
-	const choices = pocs.filter((p) => p.status === 'active' || p.status === 'paused' || p.id === pocId);
 	const dates = quickDates(today).slice(0, 6);
 	const custom = dueDate && !dates.some((d) => d.value === dueDate);
-	// Si la empresa tiene una PoC activa, pregunta si va dentro (si no, se queda en la cuenta y la PoC la enseña igual).
-	const accountPocs = !lockCategory && category !== 'poc' ? pocsOfAccount(pocs, company) : [];
-	// Que pulsar un chip no quite el foco del campo (y no se cierre el menú).
-	const keep = (e: { preventDefault: () => void }) => e.preventDefault();
+	// PoCs: primero las de la empresa elegida y después las últimas añadidas.
+	const live = pocs.filter((p) => p.status === 'active' || p.status === 'paused' || p.id === pocId);
+	const recent = [...live].sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id - a.id);
+	const ofAccount = pocsOfAccount(pocs, company, { paused: true });
+	const ordered = [...ofAccount, ...recent].filter((p, i, arr) => arr.findIndex((x) => x.id === p.id) === i);
+	const shown = ordered.slice(0, POC_CHIPS);
+	const more = ordered.slice(POC_CHIPS);
+	const accountIds = new Set(ofAccount.map((p) => p.id));
 
 	return (
 		<div className="space-y-1.5 overflow-hidden pb-2.5 pl-7">
 			{!lockCategory && (
-				<div className="flex items-center gap-2">
-					<span className="w-10 shrink-0 text-[11px] text-fg-3">Tipo</span>
-					<div className="flex min-w-0 flex-wrap gap-1">
-						<button type="button" onMouseDown={keep} onClick={() => onType('task')} className={chipClass(category === 'task')}>
-							Tarea
+				<>
+					<Row label="Tipo">
+						{KINDS.map((k) => (
+							<button key={k.value} type="button" onMouseDown={keep} onClick={() => onKind(k.value)} className={chipClass(kind === k.value)}>
+								{k.label}
+							</button>
+						))}
+					</Row>
+					<Row label="Empresa">
+						<CompanyPicker value={company} onChange={onCompany} refocus={refocus} />
+					</Row>
+					<Row label="PoC">
+						<button type="button" onMouseDown={keep} onClick={() => onPoc(null)} className={chipClass(pocId == null)}>
+							Ninguna
 						</button>
-						<button type="button" onMouseDown={keep} onClick={() => onType('followup')} className={chipClass(category === 'followup')}>
-							Follow-up
-						</button>
-						{choices.slice(0, 6).map((p) => (
+						{shown.map((p) => (
 							<button
 								key={p.id}
 								type="button"
 								onMouseDown={keep}
-								onClick={() => onType('poc', p.id)}
-								className={chipClass(category === 'poc' && pocId === p.id)}
+								onClick={() => onPoc(p.id)}
+								className={chipClass(pocId === p.id)}
+								title={accountIds.has(p.id) ? `PoC de ${company}` : undefined}
 							>
 								<PocDot color={p.color} className="size-1.5" />
 								{p.name}
 							</button>
 						))}
-						{choices.length > 6 && (
+						{more.length > 0 && (
 							<select
-								value={category === 'poc' && pocId && !choices.slice(0, 6).some((p) => p.id === pocId) ? pocId : ''}
+								value={pocId && more.some((p) => p.id === pocId) ? pocId : ''}
 								onChange={(e) => {
-									if (e.target.value) onType('poc', Number(e.target.value));
+									if (e.target.value) onPoc(Number(e.target.value));
 									refocus();
 								}}
-								className="h-6 rounded-md bg-hover px-1.5 text-[12px] text-fg-2 outline-none"
+								className={cx(
+									'h-6 rounded-md px-1.5 text-[12px] outline-none',
+									pocId && more.some((p) => p.id === pocId) ? 'bg-accent text-accent-fg' : 'bg-hover text-fg-2',
+								)}
 							>
 								<option value="">Otra PoC…</option>
-								{choices.slice(6).map((p) => (
+								{more.map((p) => (
 									<option key={p.id} value={p.id}>
 										{p.name}
 									</option>
 								))}
 							</select>
 						)}
-					</div>
-				</div>
+					</Row>
+				</>
 			)}
-			{accountPocs.length > 0 && (
-				<div className="flex items-center gap-2">
-					<span className="w-10 shrink-0 text-[11px] text-fg-3">PoC</span>
-					<div className="flex min-w-0 flex-wrap items-center gap-1">
-						<span className="text-[12px] text-fg-2">¿Va a la PoC de {company}?</span>
-						{accountPocs.map((p) => (
-							<button key={p.id} type="button" onMouseDown={keep} onClick={() => onType('poc', p.id)} className={chipClass(false)}>
-								<FlaskConical className="size-3" />
-								Meterla en {p.name}
-							</button>
-						))}
-					</div>
-				</div>
-			)}
-			<div className="flex items-center gap-2">
-				<span className="w-10 shrink-0 text-[11px] text-fg-3">Fecha</span>
-				<div className="flex min-w-0 flex-wrap items-center gap-1">
+			{kind !== 'note' && (
+				<Row label="Fecha">
 					<button type="button" onMouseDown={keep} onClick={() => onDate(null)} className={chipClass(!dueDate)}>
 						Sin fecha
 					</button>
@@ -234,20 +388,15 @@ function ComposerMenu({
 							className="absolute inset-0 cursor-default opacity-0"
 						/>
 					</label>
-				</div>
-			</div>
-			{(parsed.remindAt || parsed.company || parsed.flagged) && (
+				</Row>
+			)}
+			{kind !== 'note' && (parsed.remindAt || parsed.flagged) && (
 				<div className="flex items-center gap-2">
-					<span className="w-10 shrink-0" />
+					<span className="w-12 shrink-0" />
 					<div className="flex flex-wrap gap-1.5">
 						{parsed.remindAt && (
 							<Chip tone="accent" icon={<Bell />}>
 								Aviso {timeOf(parsed.remindAt)}
-							</Chip>
-						)}
-						{parsed.company && (
-							<Chip tone="neutral" icon={<Building2 />}>
-								{parsed.company}
 							</Chip>
 						)}
 						{parsed.flagged && (
@@ -281,6 +430,7 @@ export function Composer({
 	const create = useCreateFromParsed();
 	const composerFocus = useUI((s) => s.composerFocus);
 	const select = useUI((s) => s.select);
+	const go = useUI((s) => s.go);
 	const { data: pocs = [] } = usePocs();
 
 	useEffect(() => {
@@ -288,9 +438,14 @@ export function Composer({
 	}, [composerFocus]);
 
 	// Lo elegido en el menú manda sobre lo escrito; lo escrito, sobre lo de la vista.
-	const category: Category = lockCategory ? defaults.category : (override.category ?? parsed.category ?? defaults.category);
-	const pocId =
-		category === 'poc' ? ((override.category === 'poc' ? override.pocId : undefined) ?? parsed.pocId ?? defaults.poc_id ?? null) : null;
+	const defaultKind: Kind = defaults.category === 'followup' ? 'followup' : 'task';
+	const parsedKind: Kind | null = parsed.category === 'poc' ? null : parsed.category;
+	const kind: Kind = lockCategory ? defaultKind : (override.kind ?? parsedKind ?? defaultKind);
+	const pocId = lockCategory ? (defaults.poc_id ?? null) : override.pocId !== undefined ? override.pocId : parsed.pocId;
+	const poc = pocId != null ? pocs.find((p) => p.id === pocId) : undefined;
+	const company = override.company !== undefined ? override.company : (parsed.company ?? defaults.company ?? null);
+	// Con PoC, la tarea va a su checklist (sea tarea o follow-up); la nota, a su historial.
+	const category: Category | 'note' = kind === 'note' ? 'note' : pocId != null ? 'poc' : kind;
 	const dueDate = override.dueDate !== undefined ? override.dueDate : (parsed.dueDate ?? defaults.due_date ?? null);
 	const remindAt = override.dueDate !== undefined && override.dueDate !== parsed.dueDate ? null : parsed.remindAt;
 
@@ -300,11 +455,23 @@ export function Composer({
 	};
 
 	const submit = async () => {
-		const item = await create({ ...parsed, category, pocId, dueDate, remindAt }, { category, company: defaults.company }).catch(
-			() => null,
-		);
-		if (!item) return;
+		const res = await create(
+			{ ...parsed, category, pocId, pocName: poc?.name ?? null, company, dueDate, remindAt },
+			{ category: defaults.category },
+		).catch(() => null);
+		if (!res) return;
 		reset();
+		if ('note' in res) {
+			toast.success(`Nota guardada en ${res.where}`, {
+				description: res.note.body ?? undefined,
+				action: {
+					label: 'Abrir',
+					onClick: () => (pocId != null ? go({ kind: 'poc', id: pocId }) : company && go({ kind: 'account', name: company })),
+				},
+			});
+			return;
+		}
+		const { item } = res;
 		// Si la tarea no va a la lista que estás viendo, dilo para que no parezca que se ha perdido.
 		const elsewhere = item.category !== defaults.category || (defaults.poc_id != null && item.poc_id !== defaults.poc_id);
 		if (elsewhere) {
@@ -315,16 +482,17 @@ export function Composer({
 		}
 	};
 
-	// Tab recorre los tipos: tarea → follow-up → cada PoC.
+	// Tab recorre los tipos: follow-up → tarea → nota.
 	const cycleType = (back: boolean) => {
-		const types: { category: Category; pocId: number | null }[] = [
-			{ category: 'task', pocId: null },
-			{ category: 'followup', pocId: null },
-			...pocs.filter((p) => p.status === 'active').map((p) => ({ category: 'poc' as Category, pocId: p.id })),
-		];
-		const i = types.findIndex((t) => t.category === category && (t.category !== 'poc' || t.pocId === pocId));
-		const next = types[(i + (back ? types.length - 1 : 1)) % types.length];
-		setOverride((o) => ({ ...o, category: next.category, pocId: next.pocId }));
+		const i = KINDS.findIndex((k) => k.value === kind);
+		const next = KINDS[(i + (back ? KINDS.length - 1 : 1)) % KINDS.length];
+		setOverride((o) => ({ ...o, kind: next.value }));
+	};
+
+	// Al elegir una PoC sin empresa puesta, la empresa es la de la PoC.
+	const choosePoc = (id: number | null) => {
+		const p = id != null ? pocs.find((x) => x.id === id) : undefined;
+		setOverride((o) => ({ ...o, pocId: id, ...(p?.company && !company ? { company: p.company } : {}) }));
 	};
 
 	const open = focused && !!text;
@@ -365,7 +533,7 @@ export function Composer({
 				/>
 				{open && (
 					<span className="shrink-0 text-[11px] text-fg-3">
-						{!lockCategory && 'Tab cambia el tipo · '}↩ añadir
+						{!lockCategory && 'Tab cambia el tipo · '}↩ {kind === 'note' ? 'guardar nota' : 'añadir'}
 					</span>
 				)}
 			</div>
@@ -373,12 +541,14 @@ export function Composer({
 				{open && (
 					<motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}>
 						<ComposerMenu
-							category={category}
+							kind={kind}
 							pocId={pocId}
 							dueDate={dueDate}
-							company={parsed.company ?? defaults.company ?? null}
+							company={company}
 							lockCategory={lockCategory}
-							onType={(c, id) => setOverride((o) => ({ ...o, category: c, pocId: id ?? null }))}
+							onKind={(k) => setOverride((o) => ({ ...o, kind: k }))}
+							onCompany={(c) => setOverride((o) => ({ ...o, company: c }))}
+							onPoc={choosePoc}
 							onDate={(d) => setOverride((o) => ({ ...o, dueDate: d }))}
 							parsed={parsed}
 							today={today}

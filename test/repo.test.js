@@ -295,6 +295,21 @@ test('cuentas: agrupa por empresa (o la de su PoC) sin distinguir mayúsculas ni
 	assert.throws(() => repo.getAccount('nadie'), /no existe/);
 });
 
+test('notas de una empresa: van a su historial y crean la cuenta si no existía', () => {
+	const poc = repo.createPoc({ name: 'Cafam PoC', company: 'Cafam' });
+	repo.addNote({ company: 'Nueva Empresa', body: 'Primer contacto en la feria' });
+	repo.addNote({ poc_id: poc.id, company: 'Cafam', body: 'Les gusta el piloto' });
+	assert.throws(() => repo.addNote({ body: 'Sin dueño' }), /Falta la empresa/);
+
+	assert.ok(repo.listAccounts().some((a) => a.name === 'Nueva Empresa'));
+	assert.ok(repo.suggestions().companies.includes('Nueva Empresa'));
+	const nueva = repo.getAccount('nueva empresa');
+	assert.deepEqual(nueva.activity.map((a) => a.body), ['Primer contacto en la feria']);
+	assert.equal(nueva.open.length, 0);
+	assert.ok(repo.getPoc(poc.id).activity.some((a) => a.body === 'Les gusta el piloto'));
+	assert.ok(repo.getAccount('cafam').activity.some((a) => a.body === 'Les gusta el piloto'));
+});
+
 test('estadísticas del periodo: totales, respuesta, espera y canales', () => {
 	const a = repo.createItem({ category: 'followup', title: 'BCI', company: 'BCI' });
 	const b = repo.createItem({ category: 'followup', title: 'IMQ', company: 'IMQ' });
@@ -547,6 +562,7 @@ test('migración 007: lo ya apuntado que nombra al partner queda marcado como de
 	const b = r.createItem({ category: 'poc', poc_id: poc.id, title: 'Preguntar a Fujitsu' });
 	const c = r.createItem({ category: 'poc', poc_id: poc.id, title: 'Kickoff con el cliente' });
 	db.exec('ALTER TABLE items DROP COLUMN audience');
+	db.exec('ALTER TABLE activity DROP COLUMN company'); // la 009 también se vuelve a aplicar
 	db.pragma('user_version = 6');
 	migrate(db);
 	assert.deepEqual(
@@ -564,6 +580,7 @@ test('los datos de la versión anterior se copian con lo que haya en el WAL, y e
 	await copyDb(path.join(dir, 'old.db'), path.join(dir, 'new.db'));
 	oldDb.close();
 	const fresh = new (oldDb.constructor)(path.join(dir, 'new.db'));
+	fresh.exec('ALTER TABLE activity DROP COLUMN company'); // la 009 también se vuelve a aplicar
 	fresh.pragma('user_version = 7');
 	migrate(fresh);
 	const r = createRepo(fresh, { now: () => clock });
