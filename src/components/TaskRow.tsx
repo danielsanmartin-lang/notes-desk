@@ -3,6 +3,8 @@ import { CSS } from '@dnd-kit/utilities';
 import { CornerDownRight, FlaskConical, GripVertical, Handshake, ListChecks, Send, StickyNote, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useState } from 'react';
+import { addBusinessDays, addDays, formatDay, nextDow } from '../../shared/dates.js';
+import { toast } from 'sonner';
 import { useActions, usePocs } from '../api/hooks';
 import type { Item } from '../api/types';
 import { cx, plural } from '../lib/format';
@@ -194,6 +196,7 @@ export function TaskRow({ item, today, options = {} }: { item: Item; today: stri
 							</Menu>
 						</span>
 					)}
+					{!done && !hasOpenSubs && item.due_date && item.due_date <= today && <SnoozeButtons item={item} today={today} />}
 					{followable && (
 						<button
 							type="button"
@@ -240,6 +243,46 @@ export function TaskRow({ item, today, options = {} }: { item: Item; today: stri
 				</div>
 			)}
 		</motion.div>
+	);
+}
+
+/**
+ * Posponer con un clic lo que vence hoy o ya se ha pasado: al siguiente día laborable, al lunes o a dentro de
+ * una semana. Si tenía aviso a una hora, el aviso se mueve con ella.
+ */
+function SnoozeButtons({ item, today }: { item: Item; today: string }) {
+	const a = useActions();
+	// En viernes, el siguiente día laborable ya es el lunes: entonces sale solo «Lunes».
+	const monday = nextDow(today, 1);
+	const nextDay = addBusinessDays(today, 1);
+	const options = [
+		...(nextDay !== monday ? [{ label: '+1 día', value: nextDay }] : []),
+		{ label: 'Lunes', value: monday },
+		{ label: '+1 semana', value: addDays(today, 7) },
+	];
+	const move = async (date: string) => {
+		const prev = { due_date: item.due_date, remind_at: item.remind_at };
+		const remind_at = item.remind_at ? `${date}T${item.remind_at.slice(11)}` : null;
+		await a.update(item.id, { due_date: date, remind_at });
+		toast.success(`Pospuesta al ${formatDay(date, today)}`, {
+			description: item.title,
+			action: { label: 'Deshacer', onClick: () => a.update(item.id, prev) },
+		});
+	};
+	return (
+		<span className="hidden items-center rounded-md bg-hover group-hover:inline-flex" onClick={(e) => e.stopPropagation()}>
+			{options.map((o) => (
+				<button
+					key={o.value}
+					type="button"
+					onClick={() => move(o.value)}
+					className="h-6 rounded-md px-1.5 text-[11.5px] font-medium text-fg-2 hover:bg-active hover:text-fg"
+					title={`Posponer al ${formatDay(o.value, today)}`}
+				>
+					{o.label}
+				</button>
+			))}
+		</span>
 	);
 }
 

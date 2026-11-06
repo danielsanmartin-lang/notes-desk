@@ -80,6 +80,8 @@ export function startServer({ repo, port = 0, token = null, staticDir = null, me
 
 	r.get('/pocs', (req, res) => res.json(repo.listPocs()));
 	r.post('/pocs', (req, res) => res.status(201).json(repo.createPoc(req.body, { useTemplate: !!req.body?.use_template })));
+	r.get('/pocs/stale', (req, res) => res.json(repo.stalePocs()));
+	r.post('/pocs/:id/stale-snooze', (req, res) => res.json(repo.snoozeStalePoc(id(req), req.body?.until ?? null)));
 	r.get('/pocs/:id', (req, res) => res.json(repo.getPoc(id(req))));
 	r.patch('/pocs/:id', (req, res) => res.json(repo.updatePoc(id(req), req.body)));
 	r.delete('/pocs/:id', (req, res) => {

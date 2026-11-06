@@ -16,6 +16,7 @@ import type {
 	Poc,
 	PocAdmin,
 	Settings,
+	StalePoc,
 	Stats,
 	Suggestions,
 	WeekDetail,
@@ -37,6 +38,7 @@ export const useCounts = () => useQuery({ queryKey: ['counts'], queryFn: () => a
 export const usePocs = () => useQuery({ queryKey: ['pocs'], queryFn: () => api<Poc[]>('/pocs') });
 export const usePoc = (id: number) =>
 	useQuery({ queryKey: ['poc', id], queryFn: () => api<{ poc: Poc; contacts: PocAdmin[]; activity: Activity[]; account_items: Item[] }>(`/pocs/${id}`), retry: false });
+export const useStalePocs = () => useQuery({ queryKey: ['stale-pocs'], queryFn: () => api<StalePoc[]>('/pocs/stale') });
 export const useAccounts = () => useQuery({ queryKey: ['accounts'], queryFn: () => api<AccountSummary[]>('/accounts') });
 export const useAccount = (name: string) =>
 	useQuery({
@@ -131,6 +133,7 @@ export function useActions() {
 				post<Poc>(`/pocs/${id}/status`, body),
 			deletePoc: (id: number) => run(api(`/pocs/${id}`, { method: 'DELETE' })),
 			pocNote: (id: number, body: string) => post<Activity>(`/pocs/${id}/note`, { body }),
+			snoozeStale: (id: number, until: string | null) => post(`/pocs/${id}/stale-snooze`, { until }),
 			addAdmin: (pocId: number, data: Partial<PocAdmin>) => post<PocAdmin>(`/pocs/${pocId}/admins`, data),
 			updateAdmin: (id: number, data: Partial<PocAdmin>) =>
 				run(api<PocAdmin>(`/poc-admins/${id}`, { method: 'PATCH', body: data })),

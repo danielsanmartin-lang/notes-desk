@@ -267,6 +267,18 @@ export interface Stats {
 	pocs: PocSummary;
 }
 
+/** PoC activa sin nada nuevo desde hace `days` días (en ella o en su cuenta). */
+export interface StalePoc {
+	id: number;
+	name: string;
+	color: string | null;
+	company: string | null;
+	last_change_at: string | null;
+	/** Fecha desde la que se cuenta: el último cambio, su creación o su fecha de inicio. */
+	since: string;
+	days: number;
+}
+
 export interface Suggestions {
 	companies: string[];
 	contacts: { value: string; company: string | null }[];

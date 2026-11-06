@@ -107,6 +107,9 @@ function parseAmount(v) {
 const pick = (obj, keys) => Object.fromEntries(keys.map((k) => [k, obj[k]]));
 
 const itemOut = (row) => row && { ...row, flagged: !!row.flagged };
+/** Días sin nada nuevo a partir de los cuales una PoC activa sale como «sin movimiento». */
+export const STALE_DAYS = 7;
+
 const activityOut = (row) => row && { ...row, meta: row.meta ? JSON.parse(row.meta) : null };
 
 const fold = (s) =>
@@ -1366,6 +1369,45 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 	// ── Mantenimiento y avisos ─────────────────────────────────────────────────
 
 	/** Reanuda las PoCs cuya pausa ha terminado. Devuelve cuántas. */
+	// ── PoCs sin movimiento ────────────────────────────────────────────────────
+
+	/**
+	 * PoCs activas que llevan STALE_DAYS días o más sin nada nuevo: ni tarea o follow-up creado, ni toque,
+	 * respuesta, nota o completada, en la PoC o en su cuenta. Reprogramar no cuenta. Cuenta desde que se
+	 * creó (o desde su fecha de inicio, si es posterior); las silenciadas no salen hasta la fecha elegida.
+	 */
+	function stalePocs() {
+		const t = today();
+		const sameAccount = (expr) => `(p.company IS NOT NULL AND trim(fold(${expr})) = trim(fold(p.company)))`;
+		const rows = all(
+			`SELECT p.id, p.name, p.color, p.company, p.created_at, p.start_date, p.stale_snoozed_until,
+			   (SELECT max(a.occurred_at) FROM activity a LEFT JOIN items i ON i.id = a.item_id
+			    WHERE a.kind IN ('created', 'touch', 'reply', 'note', 'done', 'resumed')
+			      AND (i.id IS NULL OR i.deleted_at IS NULL)
+			      AND (a.poc_id = p.id OR i.poc_id = p.id
+			           OR (i.id IS NOT NULL AND i.poc_id IS NULL AND ${sameAccount('i.company')})
+			           OR (a.item_id IS NULL AND a.poc_id IS NULL AND ${sameAccount('a.company')}))) AS last_change_at
+			 FROM pocs p WHERE p.status = 'active'`,
+		);
+		return rows
+			.filter((r) => !(r.start_date && r.start_date > t) && !(r.stale_snoozed_until && r.stale_snoozed_until > t))
+			.map((r) => {
+				const since = [r.last_change_at, r.created_at, r.start_date].filter(Boolean).map((x) => x.slice(0, 10)).sort().at(-1);
+				return { id: r.id, name: r.name, color: r.color, company: r.company, last_change_at: r.last_change_at, since, days: daysBetween(since, t) };
+			})
+			.filter((r) => r.days >= STALE_DAYS)
+			.sort((a, b) => b.days - a.days || a.name.localeCompare(b.name));
+	}
+
+	/** Silencia el aviso de una PoC sin movimiento hasta `until` (o lo reactiva, con null). */
+	function snoozeStalePoc(id, until) {
+		requirePoc(id);
+		const u = emptyToNull(until);
+		if (u && !isValidDate(u)) throw bad('Fecha no válida');
+		updateRow('pocs', id, { stale_snoozed_until: u });
+		return { id, stale_snoozed_until: u };
+	}
+
 	function housekeeping() {
 		const due = all(`SELECT id FROM pocs WHERE status = 'paused' AND paused_until IS NOT NULL AND paused_until <= @today`, {
 			today: today(),
@@ -1426,6 +1468,8 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 		searchItems,
 		suggestions,
 		housekeeping,
+		stalePocs,
+		snoozeStalePoc,
 		dueReminders,
 		markNotified,
 	};

@@ -6,6 +6,7 @@ import { useActions, useItems, useSearchItems, useToday } from '../api/hooks';
 import type { Item } from '../api/types';
 import { Chip, EmptyState } from '../components/bits';
 import { Composer } from '../components/Composer';
+import { StalePocsGroup } from '../components/StalePocs';
 import { DoneSection, Group, TaskList } from '../components/TaskList';
 import { Button, Confirm, Kbd } from '../components/ui';
 import { capFirst, cx, longDate, plural } from '../lib/format';
@@ -123,6 +124,7 @@ export function TodayView() {
 									: 'Aquí aparece lo que vence hoy, los follow-ups que toca perseguir, lo destacado y lo que no tiene fecha.'}
 							</EmptyState>
 						)}
+						<StalePocsGroup today={today} />
 						{chase.length > 0 && (
 							<Group title="Toca volver a perseguir" icon={<AlarmClock />} count={chase.length} tone="warn">
 								<TaskList items={chase} today={today} options={opts} />

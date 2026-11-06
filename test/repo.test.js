@@ -310,6 +310,31 @@ test('notas de una empresa: van a su historial y crean la cuenta si no existía'
 	assert.ok(repo.getAccount('cafam').activity.some((a) => a.body === 'Les gusta el piloto'));
 });
 
+test('PoCs sin movimiento: 7 días sin nada nuevo en la PoC o su cuenta; reprogramar no cuenta', () => {
+	const cafam = repo.createPoc({ name: 'Cafam', company: 'Cafam' });
+	const edp = repo.createPoc({ name: 'EDP', company: 'EDP' });
+	repo.createPoc({ name: 'Futura', company: 'Futura', start_date: '2026-11-20' });
+	const t = repo.createItem({ category: 'poc', poc_id: cafam.id, title: 'Kickoff', due_date: '2026-10-27' });
+	assert.deepEqual(repo.stalePocs(), []);
+
+	at('2026-11-02T09:00:00'); // 7 días después
+	assert.deepEqual(repo.stalePocs().map((p) => [p.name, p.days]), [['Cafam', 7], ['EDP', 7]]);
+	repo.updateItem(t.id, { due_date: '2026-11-05' }); // reprogramar no es movimiento
+	repo.createItem({ category: 'task', title: 'Llamar', company: 'EDP' }); // tarea de la cuenta sí
+	assert.deepEqual(repo.stalePocs().map((p) => p.name), ['Cafam']);
+	repo.addNote({ company: 'cafam', body: 'Nota suelta de la cuenta' });
+	assert.deepEqual(repo.stalePocs(), []);
+
+	at('2026-11-10T09:00:00');
+	assert.deepEqual(repo.stalePocs().map((p) => [p.name, p.days]), [['Cafam', 8], ['EDP', 8]]);
+	repo.snoozeStalePoc(edp.id, '2026-11-17');
+	assert.deepEqual(repo.stalePocs().map((p) => p.name), ['Cafam']);
+	at('2026-11-17T09:00:00');
+	assert.deepEqual(repo.stalePocs().map((p) => p.name), ['Cafam', 'EDP']);
+	repo.setPocStatus(cafam.id, { status: 'paused' });
+	assert.deepEqual(repo.stalePocs().map((p) => p.name), ['EDP']);
+});
+
 test('estadísticas del periodo: totales, respuesta, espera y canales', () => {
 	const a = repo.createItem({ category: 'followup', title: 'BCI', company: 'BCI' });
 	const b = repo.createItem({ category: 'followup', title: 'IMQ', company: 'IMQ' });
@@ -563,6 +588,7 @@ test('migración 007: lo ya apuntado que nombra al partner queda marcado como de
 	const c = r.createItem({ category: 'poc', poc_id: poc.id, title: 'Kickoff con el cliente' });
 	db.exec('ALTER TABLE items DROP COLUMN audience');
 	db.exec('ALTER TABLE activity DROP COLUMN company'); // la 009 también se vuelve a aplicar
+	db.exec('ALTER TABLE pocs DROP COLUMN stale_snoozed_until'); // y la 010
 	db.pragma('user_version = 6');
 	migrate(db);
 	assert.deepEqual(
@@ -581,6 +607,7 @@ test('los datos de la versión anterior se copian con lo que haya en el WAL, y e
 	oldDb.close();
 	const fresh = new (oldDb.constructor)(path.join(dir, 'new.db'));
 	fresh.exec('ALTER TABLE activity DROP COLUMN company'); // la 009 también se vuelve a aplicar
+	fresh.exec('ALTER TABLE pocs DROP COLUMN stale_snoozed_until'); // y la 010
 	fresh.pragma('user_version = 7');
 	migrate(fresh);
 	const r = createRepo(fresh, { now: () => clock });
