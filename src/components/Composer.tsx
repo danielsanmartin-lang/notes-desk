@@ -385,6 +385,14 @@ function ComposerMenu({
 								onDate(e.target.value || null);
 								refocus();
 							}}
+							// Un input de fecha invisible solo abre el calendario si aciertas en su icono; así se abre al hacer clic en cualquier parte.
+							onClick={(e) => {
+								try {
+									e.currentTarget.showPicker();
+								} catch {
+									/* sin showPicker: se queda el comportamiento nativo */
+								}
+							}}
 							className="absolute inset-0 cursor-default opacity-0"
 						/>
 					</label>
