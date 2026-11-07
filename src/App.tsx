@@ -25,7 +25,7 @@ import { useItemOps } from './lib/ops';
 import { useUI, type View } from './lib/store';
 import { AccountsView, AccountView } from './views/AccountViews';
 import { FollowUpsView, TasksView, TodayView, TrashView, UpcomingView } from './views/ListViews';
-import { ClosedPocsView, NewPocDialog, PocsView, PocView } from './views/PocViews';
+import { ClosedPocsView, ClosedRfpsView, NewPocDialog, PocsView, PocView, RfpsView } from './views/PocViews';
 import { SettingsView } from './views/SettingsView';
 import { StatsView } from './views/StatsView';
 import { WeeksView } from './views/WeeksView';
@@ -57,6 +57,10 @@ function CurrentView({ view }: { view: View }) {
 			return <PocsView />;
 		case 'pocs-closed':
 			return <ClosedPocsView />;
+		case 'rfps':
+			return <RfpsView />;
+		case 'rfps-closed':
+			return <ClosedRfpsView />;
 		case 'poc':
 			return <PocView key={view.id} id={view.id} />;
 		case 'accounts':

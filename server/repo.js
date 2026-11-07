@@ -16,7 +16,7 @@ import {
 } from '../shared/dates.js';
 import { companyUrl, parseHubspotCompanyRef, parseHubspotRef } from '../shared/hubspot.js';
 import { isCountry } from '../shared/countries.js';
-import { regionOf, sumByCurrency } from '../shared/pocs.js';
+import { regionOf, rfpStage, RFP_STAGES, sumByCurrency } from '../shared/pocs.js';
 import { searchTerms, snippetAround } from '../shared/search.js';
 import { APPEARANCES, THEME_IDS } from '../shared/themes.js';
 
@@ -33,6 +33,7 @@ const notFound = (what) => new HttpError(404, `${what} no existe`);
 export const CATEGORIES = ['followup', 'task', 'poc'];
 export const CHANNELS = ['email', 'whatsapp', 'call', 'linkedin', 'meeting'];
 export const POC_STATUSES = ['active', 'paused', 'won', 'lost'];
+export const POC_KINDS = ['poc', 'rfp'];
 export const POC_COLORS = ['#142CD1', '#1D9E75', '#D85A30', '#7F77DD', '#D4537E', '#BA7517', '#0E9AA7', '#639922'];
 
 export const DEFAULT_SETTINGS = {
@@ -42,6 +43,15 @@ export const DEFAULT_SETTINGS = {
 	open_at_login: false,
 	// «Tareas de PoC»: sugerencias que salen en cada PoC y se añaden con un clic.
 	poc_template: ['Mandar instrucciones de whitelisting y guía', 'Revisar si han creado usuarios y campañas', 'Mandar follow-up PoC'].join('\n'),
+	// «Tareas de RFP»: lo mismo para las RFPs.
+	rfp_template: [
+		'Leer los pliegos y resumir requisitos',
+		'Decidir si nos presentamos',
+		'Enviar preguntas de aclaración',
+		'Preparar la propuesta técnica',
+		'Preparar la propuesta económica',
+		'Revisión final y entrega',
+	].join('\n'),
 	digest_last: '',
 	hubspot_portal_id: '',
 	appearance: 'system', // system | light | dark
@@ -52,7 +62,7 @@ export const DEFAULT_SETTINGS = {
 const PREV_FIELDS = ['state', 'due_date', 'waiting_since', 'touch_count', 'last_touch_at', 'channel', 'completed_at'];
 
 const ITEM_SELECT = `
-	SELECT i.*, p.name AS poc_name, p.color AS poc_color, p.status AS poc_status,
+	SELECT i.*, p.name AS poc_name, p.color AS poc_color, p.status AS poc_status, p.kind AS poc_kind,
 	       par.title AS parent_title,
 	       (SELECT acc.hubspot_url FROM accounts acc
 	         WHERE acc.key = trim(fold(coalesce(nullif(i.company, ''), p.company)))) AS account_hubspot_url,
@@ -109,6 +119,8 @@ const pick = (obj, keys) => Object.fromEntries(keys.map((k) => [k, obj[k]]));
 const itemOut = (row) => row && { ...row, flagged: !!row.flagged };
 /** Días sin nada nuevo a partir de los cuales una PoC activa sale como «sin movimiento». */
 export const STALE_DAYS = 7;
+/** Días de antelación con los que una fecha límite de RFP sale en Inicio. */
+export const RFP_DAYS = 7;
 
 const activityOut = (row) => row && { ...row, meta: row.meta ? JSON.parse(row.meta) : null };
 
@@ -142,7 +154,7 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 
 	function requirePoc(id) {
 		const p = rawPoc(id);
-		if (!p) throw notFound('La PoC');
+		if (!p) throw notFound('La PoC o RFP');
 		return p;
 	}
 
@@ -294,7 +306,7 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 		}
 		if (!d.category) d.category = d.poc_id ? 'poc' : 'task';
 		if (d.category === 'poc') {
-			if (!d.poc_id) throw bad('Elige la PoC');
+			if (!d.poc_id) throw bad('Elige la PoC o la RFP');
 			requirePoc(d.poc_id);
 		} else {
 			d.poc_id = null;
@@ -358,7 +370,7 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 			let pocId = 'poc_id' in d ? d.poc_id : it.poc_id;
 			if (d.poc_id && !d.category) category = 'poc';
 			if (category === 'poc') {
-				if (!pocId) throw bad('Elige la PoC');
+				if (!pocId) throw bad('Elige la PoC o la RFP');
 				requirePoc(pocId);
 			} else {
 				pocId = null;
@@ -612,7 +624,9 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 			followups_due: n(`${FOLLOWUPS_COND} AND i.due_date <= @today`),
 			tasks: n(TASKS_COND),
 			trash: n(`i.deleted_at IS NOT NULL AND (par.id IS NULL OR par.deleted_at IS NULL)`),
-			pocs: listPocs().map((x) => pick(x, ['id', 'name', 'color', 'status', 'paused_until', 'country', 'total', 'done', 'waiting'])),
+			pocs: listPocs().map((x) =>
+				pick(x, ['id', 'kind', 'name', 'color', 'status', 'paused_until', 'country', 'total', 'done', 'waiting', 'submitted_at', 'submission_deadline', 'close_reason']),
+			),
 		};
 	}
 
@@ -659,14 +673,14 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 
 	function getPoc(id) {
 		const poc = get(`${POC_SELECT} WHERE p.id = @id`, { id });
-		if (!poc) throw notFound('La PoC');
+		if (!poc) throw notFound('La PoC o RFP');
 		// Lo que se apunta en la cuenta de la PoC sin meterlo en ella (tareas y follow-ups con su empresa) también
 		// se ve en la PoC: lo abierto mientras siga viva y, en el historial, lo que pasó mientras estuvo abierta.
 		const key = poc.company ? fold(poc.company).trim() || null : null;
-		const p = { id, key, from: poc.created_at, to: poc.closed_at ?? '9999' };
+		const p = { id, key, kind: poc.kind, from: poc.created_at, to: poc.closed_at ?? '9999' };
 		const fromAccount = `i.poc_id IS NULL AND i.deleted_at IS NULL AND trim(fold(i.company)) = @key`;
 		const activity = all(
-			`SELECT a.*, i.title AS item_title, (i.id IS NOT NULL AND i.poc_id IS NULL) AS from_account
+			`SELECT a.*, i.title AS item_title, (i.id IS NOT NULL AND i.poc_id IS NULL) AS from_account, @kind AS poc_kind
 			 FROM activity a LEFT JOIN items i ON i.id = a.item_id
 			 WHERE a.poc_id = @id OR (i.poc_id = @id AND i.deleted_at IS NULL)
 			    OR (${fromAccount} AND a.occurred_at >= @from AND a.occurred_at <= @to)
@@ -690,10 +704,34 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 		const out = {};
 		if ('name' in data) {
 			const n = String(data.name ?? '').trim();
-			if (!n) throw bad('La PoC necesita un nombre');
+			if (!n) throw bad('Falta el nombre');
 			out.name = n.slice(0, 200);
 		}
 		for (const k of ['company', 'notes']) if (k in data) out[k] = emptyToNull(data[k]);
+		// Lo propio de una RFP: fechas clave, portal de licitación y nº de expediente.
+		for (const [k, label] of [
+			['submission_deadline', 'Fecha límite de entrega no válida'],
+			['questions_deadline', 'Fecha límite de preguntas no válida'],
+			['award_date', 'Fecha de adjudicación no válida'],
+		]) {
+			if (!(k in data)) continue;
+			const v = emptyToNull(data[k]);
+			if (v && !isValidDate(v)) throw bad(label);
+			out[k] = v;
+		}
+		if ('tender_ref' in data) out.tender_ref = emptyToNull(data.tender_ref)?.slice(0, 120) ?? null;
+		if ('portal_url' in data) {
+			let v = emptyToNull(data.portal_url);
+			if (v && !/^https?:\/\//i.test(v)) v = `https://${v}`;
+			if (v) {
+				try {
+					new URL(v);
+				} catch {
+					throw bad('El enlace del portal no parece válido');
+				}
+			}
+			out.portal_url = v;
+		}
 		if ('partner' in data) out.partner = emptyToNull(data.partner)?.slice(0, 120) ?? null;
 		if ('owner' in data) out.owner = emptyToNull(data.owner)?.slice(0, 120) ?? null;
 		if ('amount' in data) {
@@ -742,7 +780,9 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 
 	function createPoc(data, { useTemplate = false } = {}) {
 		const d = normalizePoc(data ?? {});
-		if (!d.name) throw bad('La PoC necesita un nombre');
+		if (!d.name) throw bad('Falta el nombre');
+		const kind = data?.kind ?? 'poc';
+		if (!POC_KINDS.includes(kind)) throw bad('Tipo no válido: PoC o RFP');
 		const t = ts();
 		const count = get('SELECT COUNT(*) AS n FROM pocs').n;
 		const row = {
@@ -751,6 +791,7 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 			notes: null,
 			color: POC_COLORS[count % POC_COLORS.length],
 			...d,
+			kind,
 			status: 'active',
 			sort_order: get('SELECT coalesce(max(sort_order), 0) + 1 AS s FROM pocs').s,
 			created_at: t,
@@ -763,7 +804,8 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 			);
 			logActivity({ poc_id: pocId, kind: 'created', at: t });
 			if (useTemplate) {
-				for (const line of getSettings().poc_template.split('\n')) {
+				const s = getSettings();
+				for (const line of (kind === 'rfp' ? s.rfp_template : s.poc_template).split('\n')) {
 					if (line.trim()) createItem({ category: 'poc', poc_id: pocId, title: line.trim() });
 				}
 			}
@@ -833,8 +875,9 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 		if (!run('DELETE FROM poc_admins WHERE id = @id', { id }).changes) throw notFound('El admin');
 	}
 
-	function setPocStatus(id, { status, paused_until = null, body = null } = {}) {
+	function setPocStatus(id, { status, paused_until = null, body = null, date = null } = {}) {
 		const poc = requirePoc(id);
+		if (poc.kind === 'rfp') return setRfpStage(poc, { stage: status, body, date });
 		if (!POC_STATUSES.includes(status)) throw bad('Estado no válido');
 		const until = emptyToNull(paused_until);
 		if (until && !isValidDate(until)) throw bad('Fecha no válida');
@@ -853,6 +896,36 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 		})();
 		return getPoc(id).poc;
 	}
+
+	/**
+	 * Etapas de una RFP: en preparación, presentada (con la fecha en que se presentó; hoy si no se dice),
+	 * adjudicada, perdida o descartada. Volver a «presentada» desde una concluida conserva su fecha.
+	 */
+	function setRfpStage(poc, { stage, body = null, date = null }) {
+		if (!RFP_STAGES.includes(stage)) throw bad('Estado no válido para una RFP');
+		const when = emptyToNull(date);
+		if (when && !isValidDate(when)) throw bad('Fecha no válida');
+		const t = ts();
+		const closed = stage === 'won' || stage === 'lost' || stage === 'declined';
+		const fields = {
+			status: stage === 'won' ? 'won' : stage === 'lost' || stage === 'declined' ? 'lost' : 'active',
+			paused_until: null,
+			close_reason: stage === 'declined' ? 'declined' : null,
+			closed_at: closed ? t : null,
+			updated_at: t,
+		};
+		if (stage === 'preparing') fields.submitted_at = null;
+		if (stage === 'submitted') fields.submitted_at = when ?? poc.submitted_at ?? today();
+		const kind = { preparing: 'resumed', submitted: 'submitted', won: 'won', lost: 'lost', declined: 'declined' }[stage];
+		db.transaction(() => {
+			updateRow('pocs', poc.id, fields);
+			if (stage !== rfpStage(poc)) logActivity({ poc_id: poc.id, kind, body, at: t });
+		})();
+		return getPoc(poc.id).poc;
+	}
+
+	/** 'poc' o 'rfp' (o error si no existe). */
+	const pocKind = (id) => requirePoc(id).kind;
 
 	function deletePoc(id) {
 		requirePoc(id);
@@ -907,7 +980,7 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 			done,
 			touches: log(['touch']),
 			replies: log(['reply']),
-			poc_events: log(['paused', 'resumed', 'won', 'lost']),
+			poc_events: log(['paused', 'resumed', 'won', 'lost', 'submitted', 'declined']),
 		};
 	}
 
@@ -1072,7 +1145,7 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 			if (r.due_date && (!e.next_due || r.due_date < e.next_due)) e.next_due = r.due_date;
 		}
 		for (const p of listPocs()) {
-			if (p.company) entry(fold(p.company).trim()).pocs.push(pick(p, ['id', 'name', 'color', 'status']));
+			if (p.company) entry(fold(p.company).trim()).pocs.push(pick(p, ['id', 'kind', 'name', 'color', 'status']));
 		}
 		const acts = all(
 			`SELECT fold(coalesce(nullif(i.company, ''), pi.company, pa.company, a.company)) AS k, max(a.occurred_at) AS last,
@@ -1134,7 +1207,7 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 		}
 		const scope = `(fold(coalesce(nullif(i.company, ''), pi.company)) = @key OR fold(pa.company) = @key OR trim(fold(a.company)) = @key)`;
 		const activity = all(
-			`SELECT a.*, i.title AS item_title, coalesce(pa.name, pi.name) AS poc_name
+			`SELECT a.*, i.title AS item_title, coalesce(pa.name, pi.name) AS poc_name, coalesce(pa.kind, pi.kind) AS poc_kind
 			 FROM activity a LEFT JOIN items i ON i.id = a.item_id
 			 LEFT JOIN pocs pi ON pi.id = i.poc_id LEFT JOIN pocs pa ON pa.id = a.poc_id
 			 WHERE a.kind <> 'created' AND (i.id IS NULL OR i.deleted_at IS NULL) AND ${scope}
@@ -1278,8 +1351,8 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 			return { region, touches: r.touches ?? 0, done: r.done ?? 0, replies: r.replies ?? 0 };
 		});
 
-		// ── PoCs (con su importe efectivo: el del deal o el manual) ──
-		const allPocs = listPocs();
+		// ── PoCs (con su importe efectivo: el del deal o el manual). Las RFPs no cuentan aquí. ──
+		const allPocs = listPocs().filter((p) => p.kind === 'poc');
 		const inRegion = R ? allPocs.filter((p) => regionOf(p.country) === R) : allPocs;
 		const inCourse = (list) => list.filter((p) => p.status === 'active' || p.status === 'paused');
 		const summary = (list) => {
@@ -1387,7 +1460,7 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 			      AND (a.poc_id = p.id OR i.poc_id = p.id
 			           OR (i.id IS NOT NULL AND i.poc_id IS NULL AND ${sameAccount('i.company')})
 			           OR (a.item_id IS NULL AND a.poc_id IS NULL AND ${sameAccount('a.company')}))) AS last_change_at
-			 FROM pocs p WHERE p.status = 'active'`,
+			 FROM pocs p WHERE p.status = 'active' AND p.kind = 'poc'`,
 		);
 		return rows
 			.filter((r) => !(r.start_date && r.start_date > t) && !(r.stale_snoozed_until && r.stale_snoozed_until > t))
@@ -1397,6 +1470,32 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 			})
 			.filter((r) => r.days >= STALE_DAYS)
 			.sort((a, b) => b.days - a.days || a.name.localeCompare(b.name));
+	}
+
+	// ── RFPs con entrega próxima ───────────────────────────────────────────────
+
+	/**
+	 * Fechas límite de las RFPs en preparación (sin presentar): el límite de preguntas de hoy a RFP_DAYS días y
+	 * la entrega hasta RFP_DAYS días, incluidas las ya vencidas, que siguen saliendo hasta que se presente o se cierre.
+	 */
+	function rfpDeadlines() {
+		const t = today();
+		const horizon = addDays(t, RFP_DAYS);
+		const rows = all(
+			`SELECT id, name, color, company, questions_deadline, submission_deadline FROM pocs
+			 WHERE kind = 'rfp' AND status = 'active' AND submitted_at IS NULL`,
+		);
+		const out = [];
+		for (const r of rows) {
+			const base = { id: r.id, name: r.name, color: r.color, company: r.company };
+			if (r.questions_deadline && r.questions_deadline >= t && r.questions_deadline <= horizon) {
+				out.push({ ...base, what: 'questions', date: r.questions_deadline, days: daysBetween(t, r.questions_deadline) });
+			}
+			if (r.submission_deadline && r.submission_deadline <= horizon) {
+				out.push({ ...base, what: 'submission', date: r.submission_deadline, days: daysBetween(t, r.submission_deadline) });
+			}
+		}
+		return out.sort((a, b) => a.date.localeCompare(b.date) || (a.what === 'questions' ? -1 : 1) || a.name.localeCompare(b.name));
 	}
 
 	/** Silencia el aviso de una PoC sin movimiento hasta `until` (o lo reactiva, con null). */
@@ -1450,6 +1549,7 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 		counts,
 		listPocs,
 		getPoc,
+		pocKind,
 		createPoc,
 		updatePoc,
 		setPocStatus,
@@ -1470,6 +1570,7 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 		housekeeping,
 		stalePocs,
 		snoozeStalePoc,
+		rfpDeadlines,
 		dueReminders,
 		markNotified,
 	};

@@ -37,7 +37,7 @@ import { Checkbox, DueChip, PocDot, WaitingChip } from './bits';
 import { DatePicker, ReminderPicker } from './DatePicker';
 import { ChannelPicker, ReplyForm, TouchForm } from './FollowupForms';
 import { Timeline } from './Timeline';
-import { AutoTextarea, Button, IconButton, inputClass, Menu, MenuItem, Popover, SectionTitle, useDraft } from './ui';
+import { AutoTextarea, Button, IconButton, inputClass, Menu, MenuItem, MenuLabel, Popover, SectionTitle, useDraft } from './ui';
 
 export function DetailPanel({ id }: { id: number }) {
 	const select = useUI((s) => s.select);
@@ -477,7 +477,7 @@ function TypePicker({
 	onChange,
 }: {
 	item: Item;
-	pocs: { id: number; name: string; color: string | null }[];
+	pocs: { id: number; name: string; color: string | null; kind: 'poc' | 'rfp' }[];
 	onChange: (category: Item['category'], pocId?: number) => void;
 }) {
 	const seg = (on: boolean) =>
@@ -503,21 +503,30 @@ function TypePicker({
 								<span className="max-w-28 truncate">{item.poc_name}</span>
 							</>
 						) : (
-							'PoC'
+							'PoC / RFP'
 						)}
 						<ChevronDown className="size-3" />
 					</button>
 				}
 			>
 				{pocs.length ? (
-					pocs.map((p) => (
-						<MenuItem key={p.id} icon={<PocDot color={p.color} />} onSelect={() => p.id !== item.poc_id && onChange('poc', p.id)}>
-							{p.name}
-						</MenuItem>
-					))
+					(['poc', 'rfp'] as const).map((kind) => {
+						const list = pocs.filter((p) => (p.kind ?? 'poc') === kind);
+						if (!list.length) return null;
+						return (
+							<div key={kind}>
+								<MenuLabel>{kind === 'rfp' ? 'RFPs' : 'PoCs'}</MenuLabel>
+								{list.map((p) => (
+									<MenuItem key={p.id} icon={<PocDot color={p.color} />} onSelect={() => p.id !== item.poc_id && onChange('poc', p.id)}>
+										{p.name}
+									</MenuItem>
+								))}
+							</div>
+						);
+					})
 				) : (
 					<MenuItem disabled onSelect={() => {}}>
-						No hay PoCs activas
+						No hay PoCs ni RFPs activas
 					</MenuItem>
 				)}
 			</Menu>

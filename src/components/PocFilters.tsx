@@ -1,7 +1,7 @@
 // Barra de filtros de las PoCs: buscador, estado, país, owner, orden y vista (tarjetas o lista). Una fila.
 
 import { ArrowDownWideNarrow, ArrowUpNarrowWide, Check, LayoutGrid, List, Search, X } from 'lucide-react';
-import type { Poc } from '../api/types';
+import type { Poc, PocKind } from '../api/types';
 import { cx, flagEmoji } from '../lib/format';
 import {
 	countryName,
@@ -9,6 +9,7 @@ import {
 	EMPTY_FILTERS,
 	hasFilters,
 	SORT_LABEL,
+	SORTS,
 	type PocFilterState,
 	type PocSort,
 	type SortKey,
@@ -29,7 +30,9 @@ export function PocFilters({
 	mode,
 	onMode,
 	statuses,
+	kind = 'poc',
 }: {
+	kind?: PocKind;
 	pocs: Poc[];
 	filters: PocFilterState;
 	onFilters: (f: PocFilterState) => void;
@@ -52,7 +55,7 @@ export function PocFilters({
 				<input
 					value={filters.q}
 					onChange={(e) => set({ q: e.target.value })}
-					placeholder="Buscar PoC, empresa o partner"
+					placeholder={kind === 'rfp' ? 'Buscar RFP, empresa, partner o expediente' : 'Buscar PoC, empresa o partner'}
 					className={cx(inputClass, 'w-56 pl-8')}
 				/>
 			</div>
@@ -103,7 +106,7 @@ export function PocFilters({
 						</Button>
 					}
 				>
-					{(Object.keys(SORT_LABEL) as SortKey[]).map((k) => (
+					{SORTS[kind].map((k: SortKey) => (
 						<MenuItem key={k} icon={sort.key === k ? <Check /> : null} onSelect={() => onSort({ key: k, dir: sort.key === k ? sort.dir : DEFAULT_DIR[k] })}>
 							{SORT_LABEL[k]}
 						</MenuItem>

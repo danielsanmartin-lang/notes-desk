@@ -1,12 +1,14 @@
 import { Command } from 'cmdk';
 import {
 	Archive,
+	Award,
 	BarChart3,
 	Building2,
 	CalendarDays,
 	CircleCheck,
 	FlaskConical,
 	Plus,
+	ScrollText,
 	Search,
 	Send,
 	Settings,
@@ -52,13 +54,16 @@ export function CommandPalette() {
 	const actions: Action[] = [
 		{ id: 'new-fup', label: 'Nuevo follow-up', icon: <Plus />, run: create({ kind: 'followups' }) },
 		{ id: 'new-task', label: 'Nueva tarea', icon: <Plus />, hint: '⌘N', run: create({ kind: 'tasks' }) },
-		{ id: 'new-poc', label: 'Nueva PoC', icon: <Plus />, run: () => setNewPocOpen(true) },
+		{ id: 'new-poc', label: 'Nueva PoC', icon: <Plus />, run: () => setNewPocOpen('poc') },
+		{ id: 'new-rfp', label: 'Nueva RFP', icon: <Plus />, run: () => setNewPocOpen('rfp') },
 		{ id: 'go-today', label: 'Ir a Inicio', icon: <Sun />, hint: '⌘1', run: nav({ kind: 'today' }) },
 		{ id: 'go-upcoming', label: 'Ir a Próximos 7 días', icon: <CalendarDays />, hint: '⌘2', run: nav({ kind: 'upcoming' }) },
 		{ id: 'go-fup', label: 'Ir a Follow-ups', icon: <Send />, hint: '⌘3', run: nav({ kind: 'followups' }) },
 		{ id: 'go-tasks', label: 'Ir a Tareas pendientes', icon: <SquareCheckBig />, hint: '⌘4', run: nav({ kind: 'tasks' }) },
 		{ id: 'go-pocs', label: 'Ir a PoCs en curso', icon: <FlaskConical />, hint: '⌘5', run: nav({ kind: 'pocs' }) },
 		{ id: 'go-pocs-closed', label: 'Ir a PoCs concluidas', icon: <Trophy />, run: nav({ kind: 'pocs-closed' }) },
+		{ id: 'go-rfps', label: 'Ir a RFPs en curso', icon: <ScrollText />, run: nav({ kind: 'rfps' }) },
+		{ id: 'go-rfps-closed', label: 'Ir a RFPs concluidas', icon: <Award />, run: nav({ kind: 'rfps-closed' }) },
 		{ id: 'go-accounts', label: 'Ir a Cuentas', icon: <Building2 />, hint: '⌘6', run: nav({ kind: 'accounts' }) },
 		{ id: 'go-stats', label: 'Ir a Estadísticas', icon: <BarChart3 />, hint: '⌘7', run: nav({ kind: 'stats' }) },
 		{ id: 'go-weeks', label: 'Ir a Semanas', icon: <Archive />, hint: '⌘8', run: nav({ kind: 'weeks' }) },
@@ -68,7 +73,11 @@ export function CommandPalette() {
 	const fq = fold(q.trim());
 	const shownActions = fq ? actions.filter((a) => fold(a.label).includes(fq)) : actions;
 	const items = q.trim() ? (data?.items ?? []) : [];
-	const pocs = q.trim() ? (data?.pocs ?? []) : [];
+	const found = q.trim() ? (data?.pocs ?? []) : [];
+	const groups = [
+		{ heading: 'PoCs', list: found.filter((p) => p.kind !== 'rfp') },
+		{ heading: 'RFPs', list: found.filter((p) => p.kind === 'rfp') },
+	].filter((g) => g.list.length);
 	const accounts = q.trim() ? (data?.accounts ?? []) : [];
 
 	return (
@@ -86,16 +95,16 @@ export function CommandPalette() {
 				<Command.Input
 					value={q}
 					onValueChange={setQ}
-					placeholder="Busca tareas, empresas, contactos, PoCs… o una acción"
+					placeholder="Busca tareas, empresas, contactos, PoCs, RFPs… o una acción"
 					className="h-full flex-1 bg-transparent text-[14px] outline-none placeholder:text-fg-3"
 				/>
 				<Kbd>Esc</Kbd>
 			</div>
 			<Command.List className="scroll max-h-[380px] p-2">
 				<Command.Empty className="px-3 py-6 text-center text-[13px] text-fg-3">Sin resultados para «{q}»</Command.Empty>
-				{pocs.length > 0 && (
-					<Command.Group heading="PoCs" className="mb-1 [&_[cmdk-group-heading]]:px-2.5 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:text-fg-3">
-						{pocs.map((p) => (
+				{groups.map(({ heading, list }) => (
+					<Command.Group key={heading} heading={heading} className="mb-1 [&_[cmdk-group-heading]]:px-2.5 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:text-fg-3">
+						{list.map((p) => (
 							<Command.Item
 								key={`poc-${p.id}`}
 								value={`poc-${p.id}`}
@@ -111,7 +120,7 @@ export function CommandPalette() {
 							</Command.Item>
 						))}
 					</Command.Group>
-				)}
+				))}
 				{accounts.length > 0 && (
 					<Command.Group heading="Cuentas" className="mb-1 [&_[cmdk-group-heading]]:px-2.5 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:text-fg-3">
 						{accounts.map((name) => (
@@ -142,7 +151,7 @@ export function CommandPalette() {
 								}}
 								className={itemClass}
 							>
-								{i.state === 'done' ? <CircleCheck /> : i.category === 'followup' ? <Send /> : i.category === 'poc' ? <FlaskConical /> : <SquareCheckBig />}
+								{i.state === 'done' ? <CircleCheck /> : i.category === 'followup' ? <Send /> : i.category === 'poc' ? i.poc_kind === 'rfp' ? <ScrollText /> : <FlaskConical /> : <SquareCheckBig />}
 								<span className={i.state === 'done' ? 'flex-1 truncate text-fg-3 line-through' : 'flex-1 truncate'}>{i.title}</span>
 								<span className="shrink-0 text-[11.5px] text-fg-3">{i.poc_name ?? i.company ?? CATEGORY_LABEL[i.category]}</span>
 							</Command.Item>

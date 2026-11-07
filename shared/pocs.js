@@ -23,3 +23,18 @@ export function sumByCurrency(pocs) {
 	}
 	return [...sums].map(([currency, value]) => ({ currency, value }));
 }
+
+/**
+ * Etapa de una RFP a partir de sus columnas (status no cambia su CHECK; ver la migración 011):
+ * @returns {'preparing' | 'submitted' | 'won' | 'lost' | 'declined'}
+ */
+export function rfpStage(p) {
+	if (p.status === 'won') return 'won';
+	if (p.status === 'lost') return p.close_reason === 'declined' ? 'declined' : 'lost';
+	return p.submitted_at ? 'submitted' : 'preparing';
+}
+
+export const RFP_STAGES = ['preparing', 'submitted', 'won', 'lost', 'declined'];
+
+/** ¿Sigue viva? (en curso: activa o en pausa; concluida: ganada, perdida o descartada). */
+export const isOpenPoc = (p) => p.status === 'active' || p.status === 'paused';

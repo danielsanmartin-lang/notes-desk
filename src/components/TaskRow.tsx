@@ -26,8 +26,8 @@ export interface RowOptions {
 	nested?: boolean;
 	/** Palabras buscadas que se resaltan (buscador del Inicio). */
 	highlight?: string[];
-	/** PoCs activas de la cuenta: las tareas que no están en ninguna ofrecen «Meter en la PoC». */
-	movePocs?: { id: number; name: string; color: string | null }[];
+	/** PoCs (o RFPs) activas de la cuenta: las tareas que no están en ninguna ofrecen «Meter en la PoC». */
+	movePocs?: { id: number; name: string; color: string | null; kind?: 'poc' | 'rfp' }[];
 }
 
 export function TaskRow({ item, today, options = {} }: { item: Item; today: string; options?: RowOptions }) {
@@ -108,7 +108,7 @@ export function TaskRow({ item, today, options = {} }: { item: Item; today: stri
 							{pocPrefix && (
 								<>
 									<span className="mr-1.5 inline-block translate-y-[-1px] rounded-[5px] bg-accent-soft px-1.5 py-px align-middle text-[10.5px] font-semibold tracking-wide text-accent-text">
-										PoC
+										{item.poc_kind === 'rfp' ? 'RFP' : 'PoC'}
 									</span>
 									<span className="font-medium">
 										<Highlight text={item.poc_name!} terms={options.highlight} />
@@ -172,19 +172,19 @@ export function TaskRow({ item, today, options = {} }: { item: Item; today: stri
 								ops.moveToPoc(item, movePocs[0]);
 							}}
 							className={moveClass}
-							title={`Meter en ${movePocs[0].name}: pasa a ser tarea de la PoC y cuenta en su progreso`}
+							title={`Meter en ${movePocs[0].name}: pasa a ser tarea de la ${movePocs[0].kind === 'rfp' ? 'RFP' : 'PoC'} y cuenta en su progreso`}
 						>
 							<FlaskConical className="size-3" />
-							<span className="hidden lg:inline">Meter en la PoC</span>
+							<span className="hidden lg:inline">Meter en la {movePocs[0].kind === 'rfp' ? 'RFP' : 'PoC'}</span>
 						</button>
 					)}
 					{movePocs.length > 1 && (
 						<span onClick={(e) => e.stopPropagation()}>
 							<Menu
 								trigger={
-									<button type="button" className={moveClass} title="Meter en una PoC de la cuenta">
+									<button type="button" className={moveClass} title="Meter en una PoC o RFP de la cuenta">
 										<FlaskConical className="size-3" />
-							<span className="hidden lg:inline">Meter en la PoC</span>
+										<span className="hidden lg:inline">Meter en…</span>
 									</button>
 								}
 							>

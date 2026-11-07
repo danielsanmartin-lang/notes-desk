@@ -49,7 +49,7 @@ function AccountRow({ account, today }: { account: AccountSummary; today: string
 					<span className="truncate text-[13.5px] font-medium">{account.name}</span>
 					{account.pocs.map((p) => (
 						<Chip key={p.id} tone="neutral" icon={<PocDot color={p.color} className="size-1.5" />}>
-							{p.name}
+							{p.kind === 'rfp' ? `RFP · ${p.name}` : p.name}
 						</Chip>
 					))}
 				</div>
@@ -273,7 +273,9 @@ export function AccountView({ name }: { name: string }) {
 
 				{data.pocs.length > 0 && (
 					<section className="mb-6">
-						<SectionTitle>PoCs</SectionTitle>
+						<SectionTitle>
+							{data.pocs.every((p) => p.kind === 'rfp') ? 'RFPs' : data.pocs.some((p) => p.kind === 'rfp') ? 'PoCs y RFPs' : 'PoCs'}
+						</SectionTitle>
 						<div className="grid grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-3">
 							{data.pocs.map((p) => (
 								<PocCard key={p.id} poc={p} today={today} />

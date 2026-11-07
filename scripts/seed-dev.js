@@ -150,4 +150,38 @@ const pichincha = repo.createPoc({ name: 'Banco Pichincha', company: 'Banco Pich
 at(-30);
 repo.setPocStatus(pichincha.id, { status: 'lost', body: 'Eligen otro proveedor' });
 
+// ── RFPs ──
+at(-10);
+const metro = repo.createPoc(
+	{
+		kind: 'rfp',
+		name: 'Licitación SOC Metro',
+		company: 'Metro de Madrid',
+		country: 'ES',
+		owner: 'Daniel San Martín',
+		amount: 85000,
+		currency: 'EUR',
+		questions_deadline: day(1),
+		submission_deadline: day(3),
+		award_date: day(40),
+		tender_ref: 'EXP-2026/0412',
+		portal_url: 'https://contrataciondelestado.es',
+	},
+	{ useTemplate: true },
+);
+repo.addPocAdmin(metro.id, { kind: 'main', name: 'Lucía Prieto', role: 'Responsable de compras', email: 'lucia.prieto@metro.example' });
+at(-8);
+repo.completeItem(repo.listItems('poc', { pocId: metro.id }).items[0].id);
+at(-25);
+const bbva = repo.createPoc({ kind: 'rfp', name: 'RFP Concienciación BBVA', company: 'BBVA', country: 'ES', partner: 'TRC', owner: 'Alberto Cornejo', submission_deadline: day(-4), award_date: day(10), amount: 40000, currency: 'EUR' });
+at(-5);
+repo.setPocStatus(bbva.id, { status: 'submitted' });
+repo.createItem({ category: 'poc', poc_id: bbva.id, title: 'Preparar la defensa oral', due_date: day(2) });
+at(-120);
+const ande = repo.createPoc({ kind: 'rfp', name: 'Licitación ANDE', company: 'ANDE', country: 'PY', owner: 'Daniel San Martín', submission_deadline: day(-90), amount: 25000, currency: 'USD' });
+at(-95);
+repo.setPocStatus(ande.id, { status: 'submitted' });
+at(-60);
+repo.setPocStatus(ande.id, { status: 'won', body: 'Adjudicada' });
+
 console.log(`dev.db sembrada en ${dbPath}`);

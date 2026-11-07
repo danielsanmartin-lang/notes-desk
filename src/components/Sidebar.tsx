@@ -1,6 +1,7 @@
 import { useDroppable } from '@dnd-kit/core';
 import {
 	Archive,
+	Award,
 	BarChart3,
 	Building2,
 	CalendarDays,
@@ -8,6 +9,7 @@ import {
 	FlaskConical,
 	Pause,
 	Plus,
+	ScrollText,
 	Search,
 	Send,
 	Settings,
@@ -18,11 +20,11 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useState, type ReactNode } from 'react';
-import { useCounts } from '../api/hooks';
-import type { Category } from '../api/types';
+import { useCounts, useToday } from '../api/hooks';
+import type { Category, Counts, PocKind } from '../api/types';
 import { isElectron } from '../lib/bridge';
 import { cx } from '../lib/format';
-import { region, REGION_LABEL, REGIONS } from '../lib/pocs';
+import { deadlineInfo, region, REGION_LABEL, REGIONS } from '../lib/pocs';
 import { sameView, useUI, type View } from '../lib/store';
 import { PocDot, ProgressRing } from './bits';
 import { Logo } from './Logo';
@@ -92,15 +94,118 @@ function NavItem({
 	);
 }
 
+const SECTION: Record<
+	PocKind,
+	{ open: string; closed: string; icon: ReactNode; iconClass: string; closedIcon: ReactNode; noun: string; openView: View; closedView: View }
+> = {
+	poc: {
+		open: 'PoCs en curso',
+		closed: 'PoCs concluidas',
+		icon: <FlaskConical />,
+		iconClass: 'text-[#7F77DD]',
+		closedIcon: <Trophy />,
+		noun: 'PoC',
+		openView: { kind: 'pocs' },
+		closedView: { kind: 'pocs-closed' },
+	},
+	rfp: {
+		open: 'RFPs en curso',
+		closed: 'RFPs concluidas',
+		icon: <ScrollText />,
+		iconClass: 'text-[#D85A30]',
+		closedIcon: <Award />,
+		noun: 'RFP',
+		openView: { kind: 'rfps' },
+		closedView: { kind: 'rfps-closed' },
+	},
+};
+
+/** «PoCs en curso» o «RFPs en curso» (plegable, por región, con + para crear) y su «concluidas». */
+function ProjectSection({ kind, counts }: { kind: PocKind; counts: Counts | undefined }) {
+	const setNewPocOpen = useUI((s) => s.setNewPocOpen);
+	const today = useToday();
+	const [open, setOpen] = useState(true);
+	const meta = SECTION[kind];
+	const all = counts?.pocs.filter((p) => (p.kind ?? 'poc') === kind) ?? [];
+	const live = all.filter((p) => p.status === 'active' || p.status === 'paused');
+	const closedCount = all.filter((p) => p.status === 'won' || p.status === 'lost').length;
+	// Agrupadas por región (solo se rotula si hay más de una).
+	const byRegion = REGIONS.map((r) => ({ r, list: live.filter((p) => region(p.country) === r) })).filter((g) => g.list.length);
+
+	return (
+		<>
+			<div className={cx('relative', kind === 'poc' ? 'group/poc' : 'group/rfp')}>
+				<NavItem view={meta.openView} icon={meta.icon} iconClass={meta.iconClass} label={meta.open} count={live.filter((p) => p.status === 'active').length} />
+				<div
+					className={cx('absolute top-0.5 right-8 hidden items-center', kind === 'poc' ? 'group-hover/poc:flex' : 'group-hover/rfp:flex')}
+				>
+					<button
+						type="button"
+						onClick={() => setOpen(!open)}
+						className="flex size-6 items-center justify-center rounded-md text-fg-3 hover:bg-hover"
+						aria-label={open ? `Plegar ${meta.open}` : `Desplegar ${meta.open}`}
+					>
+						<ChevronRight className={cx('size-3.5 transition-transform', open && 'rotate-90')} />
+					</button>
+					<button
+						type="button"
+						onClick={() => setNewPocOpen(kind)}
+						className="flex size-6 items-center justify-center rounded-md text-fg-3 hover:bg-hover"
+						aria-label={`Nueva ${meta.noun}`}
+						title={`Nueva ${meta.noun}`}
+					>
+						<Plus className="size-3.5" />
+					</button>
+				</div>
+			</div>
+			<AnimatePresence initial={false}>
+				{open && (
+					<motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="space-y-0.5 overflow-hidden">
+						{byRegion.map(({ r, list }) => (
+							<div key={r} className="space-y-0.5">
+								{byRegion.length > 1 && <div className="pt-1.5 pb-0.5 pl-7 text-[10.5px] font-medium tracking-wide text-fg-3 uppercase">{REGION_LABEL[r]}</div>}
+								{list.map((p) => {
+									const deadline = kind === 'rfp' ? deadlineInfo(p, today) : null;
+									return (
+										<NavItem
+											key={p.id}
+											indent
+											view={{ kind: 'poc', id: p.id }}
+											icon={<PocDot color={p.color} />}
+											label={p.name}
+											drop={{ category: 'poc', poc_id: p.id, label: p.name }}
+											right={
+												p.status === 'paused' ? (
+													<Pause className="size-3 text-fg-3" aria-label="En pausa" />
+												) : kind === 'rfp' && p.submitted_at ? (
+													<Send className="size-3 text-fg-3" aria-label="Presentada" />
+												) : deadline && deadline.days <= 7 ? (
+													<span
+														title={deadline.label}
+														className={cx('text-[10.5px] font-medium tabular-nums', deadline.tone === 'danger' ? 'text-danger' : 'text-warn')}
+													>
+														{deadline.short}
+													</span>
+												) : p.total ? (
+													<ProgressRing done={p.done} total={p.total} color={p.color} size={13} />
+												) : null
+											}
+										/>
+									);
+								})}
+							</div>
+						))}
+					</motion.div>
+				)}
+			</AnimatePresence>
+			<NavItem view={meta.closedView} icon={meta.closedIcon} iconClass="text-ok" label={meta.closed} count={closedCount} />
+		</>
+	);
+}
+
 export function Sidebar() {
 	const { data: c } = useCounts();
 	const setPaletteOpen = useUI((s) => s.setPaletteOpen);
-	const setNewPocOpen = useUI((s) => s.setNewPocOpen);
-	const [pocsOpen, setPocsOpen] = useState(true);
-	const pocs = c?.pocs.filter((p) => p.status === 'active' || p.status === 'paused') ?? [];
-	const closedCount = c?.pocs.filter((p) => p.status === 'won' || p.status === 'lost').length ?? 0;
-	// Bajo «PoCs en curso», agrupadas por región (solo se rotula si hay más de una).
-	const byRegion = REGIONS.map((r) => ({ r, list: pocs.filter((p) => region(p.country) === r) })).filter((g) => g.list.length);
 
 	return (
 		<nav className="sidebar-surface flex h-full w-[232px] shrink-0 flex-col border-r border-line bg-sidebar">
@@ -149,63 +254,8 @@ export function Sidebar() {
 					count={c?.tasks}
 					drop={{ category: 'task', label: 'Tareas pendientes' }}
 				/>
-				<div className="group/pocs relative">
-					<NavItem
-						view={{ kind: 'pocs' }}
-						icon={<FlaskConical />}
-						iconClass="text-[#7F77DD]"
-						label="PoCs en curso"
-						count={pocs.filter((p) => p.status === 'active').length}
-					/>
-					<div className="absolute top-0.5 right-8 hidden items-center group-hover/pocs:flex">
-						<button
-							type="button"
-							onClick={() => setPocsOpen(!pocsOpen)}
-							className="flex size-6 items-center justify-center rounded-md text-fg-3 hover:bg-hover"
-							aria-label={pocsOpen ? 'Plegar PoCs' : 'Desplegar PoCs'}
-						>
-							<ChevronRight className={cx('size-3.5 transition-transform', pocsOpen && 'rotate-90')} />
-						</button>
-						<button
-							type="button"
-							onClick={() => setNewPocOpen(true)}
-							className="flex size-6 items-center justify-center rounded-md text-fg-3 hover:bg-hover"
-							aria-label="Nueva PoC"
-							title="Nueva PoC"
-						>
-							<Plus className="size-3.5" />
-						</button>
-					</div>
-				</div>
-				<AnimatePresence initial={false}>
-					{pocsOpen && (
-						<motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="space-y-0.5 overflow-hidden">
-							{byRegion.map(({ r, list }) => (
-								<div key={r} className="space-y-0.5">
-									{byRegion.length > 1 && <div className="pt-1.5 pb-0.5 pl-7 text-[10.5px] font-medium tracking-wide text-fg-3 uppercase">{REGION_LABEL[r]}</div>}
-									{list.map((p) => (
-										<NavItem
-											key={p.id}
-											indent
-											view={{ kind: 'poc', id: p.id }}
-											icon={<PocDot color={p.color} />}
-											label={p.name}
-											drop={{ category: 'poc', poc_id: p.id, label: p.name }}
-											right={
-												p.status === 'paused' ? (
-													<Pause className="size-3 text-fg-3" aria-label="En pausa" />
-												) : p.total ? (
-													<ProgressRing done={p.done} total={p.total} color={p.color} size={13} />
-												) : null
-											}
-										/>
-									))}
-								</div>
-							))}
-						</motion.div>
-					)}
-				</AnimatePresence>
-				<NavItem view={{ kind: 'pocs-closed' }} icon={<Trophy />} iconClass="text-ok" label="PoCs concluidas" count={closedCount} />
+				<ProjectSection kind="poc" counts={c} />
+				<ProjectSection kind="rfp" counts={c} />
 
 				<div className="px-2 pt-4 pb-1 text-[11px] font-semibold tracking-wide text-fg-3 uppercase">Visión general</div>
 				<NavItem view={{ kind: 'accounts' }} icon={<Building2 />} iconClass="text-accent" label="Cuentas" />

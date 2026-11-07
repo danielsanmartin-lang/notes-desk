@@ -6,7 +6,7 @@ import { EventEmitter } from 'node:events';
 import * as hubspot from './hubspot.js';
 import { HttpError } from './repo.js';
 
-export function startServer({ repo, port = 0, token = null, staticDir = null, meta = {} }) {
+export function startServer({ repo, documents = null, port = 0, token = null, staticDir = null, meta = {} }) {
 	const bus = new EventEmitter();
 	bus.setMaxListeners(100);
 	const app = express();
@@ -32,6 +32,14 @@ export function startServer({ repo, port = 0, token = null, staticDir = null, me
 		const n = Number(req.params.id);
 		if (!Number.isInteger(n) || n <= 0) throw new HttpError(400, 'ID no válido');
 		return n;
+	};
+
+	// Documentación: solo las RFPs la tienen (ver server/documents.js).
+	const rfpId = (req) => {
+		const pocId = id(req);
+		if (repo.pocKind(pocId) !== 'rfp') throw new HttpError(400, 'Solo las RFPs tienen documentación');
+		if (!documents) throw new HttpError(501, 'Sin carpeta de documentos');
+		return pocId;
 	};
 
 	async function portalId() {
@@ -81,11 +89,32 @@ export function startServer({ repo, port = 0, token = null, staticDir = null, me
 	r.get('/pocs', (req, res) => res.json(repo.listPocs()));
 	r.post('/pocs', (req, res) => res.status(201).json(repo.createPoc(req.body, { useTemplate: !!req.body?.use_template })));
 	r.get('/pocs/stale', (req, res) => res.json(repo.stalePocs()));
+	r.get('/rfps/deadlines', (req, res) => res.json(repo.rfpDeadlines()));
 	r.post('/pocs/:id/stale-snooze', (req, res) => res.json(repo.snoozeStalePoc(id(req), req.body?.until ?? null)));
 	r.get('/pocs/:id', (req, res) => res.json(repo.getPoc(id(req))));
 	r.patch('/pocs/:id', (req, res) => res.json(repo.updatePoc(id(req), req.body)));
-	r.delete('/pocs/:id', (req, res) => {
-		repo.deletePoc(id(req));
+	r.delete('/pocs/:id', async (req, res) => {
+		const pocId = id(req);
+		const isRfp = repo.pocKind(pocId) === 'rfp';
+		repo.deletePoc(pocId);
+		if (isRfp && documents) await documents.removeAll(pocId).catch((e) => console.error('Documentos de la RFP', e));
+		res.json({ ok: true });
+	});
+	r.get('/pocs/:id/documents', (req, res) => res.json(documents && repo.pocKind(id(req)) === 'rfp' ? documents.list(id(req)) : []));
+	// El cuerpo es el archivo tal cual (no JSON): se guarda en streaming, sin cargarlo en memoria.
+	r.post('/pocs/:id/documents', async (req, res) => {
+		const pocId = rfpId(req);
+		let name;
+		try {
+			name = decodeURIComponent(req.get('X-Filename') ?? '');
+		} catch {
+			throw new HttpError(400, 'Nombre de documento no válido');
+		}
+		res.status(201).json(await documents.save(pocId, name, req));
+	});
+	r.get('/pocs/:id/documents/:name', (req, res) => res.sendFile(documents.pathOf(rfpId(req), req.params.name)));
+	r.delete('/pocs/:id/documents/:name', async (req, res) => {
+		await documents.remove(rfpId(req), req.params.name);
 		res.json({ ok: true });
 	});
 	r.post('/pocs/:id/status', (req, res) => res.json(repo.setPocStatus(id(req), req.body ?? {})));

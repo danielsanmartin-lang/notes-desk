@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { toast } from 'sonner';
 import { toDateStr } from '../../shared/dates.js';
-import { api, qs } from './client';
+import { api, qs, upload } from './client';
 import type {
 	AccountDetail,
 	AccountSummary,
@@ -15,6 +15,8 @@ import type {
 	Meta,
 	Poc,
 	PocAdmin,
+	RfpDeadline,
+	RfpDocument,
 	Settings,
 	StalePoc,
 	Stats,
@@ -38,6 +40,15 @@ export const useCounts = () => useQuery({ queryKey: ['counts'], queryFn: () => a
 export const usePocs = () => useQuery({ queryKey: ['pocs'], queryFn: () => api<Poc[]>('/pocs') });
 export const usePoc = (id: number) =>
 	useQuery({ queryKey: ['poc', id], queryFn: () => api<{ poc: Poc; contacts: PocAdmin[]; activity: Activity[]; account_items: Item[] }>(`/pocs/${id}`), retry: false });
+export const useRfpDeadlines = () => useQuery({ queryKey: ['rfp-deadlines'], queryFn: () => api<RfpDeadline[]>('/rfps/deadlines') });
+/** Documentación de una RFP. Se refresca al volver a la ventana: lo que se deje en la carpeta desde Finder también sale. */
+export const useDocuments = (pocId: number, enabled = true) =>
+	useQuery({
+		queryKey: ['documents', pocId],
+		queryFn: () => api<RfpDocument[]>(`/pocs/${pocId}/documents`),
+		enabled,
+		staleTime: 0,
+	});
 export const useStalePocs = () => useQuery({ queryKey: ['stale-pocs'], queryFn: () => api<StalePoc[]>('/pocs/stale') });
 export const useAccounts = () => useQuery({ queryKey: ['accounts'], queryFn: () => api<AccountSummary[]>('/accounts') });
 export const useAccount = (name: string) =>
@@ -129,7 +140,7 @@ export function useActions() {
 			createPoc: (data: Partial<Poc> & { hubspot?: string; use_template?: boolean }) => post<Poc>('/pocs', data),
 			updatePoc: (id: number, data: Partial<Poc> & { hubspot?: string | null }) =>
 				run(api<Poc>(`/pocs/${id}`, { method: 'PATCH', body: data })),
-			setPocStatus: (id: number, body: { status: string; paused_until?: string | null; body?: string }) =>
+			setPocStatus: (id: number, body: { status: string; paused_until?: string | null; body?: string; date?: string | null }) =>
 				post<Poc>(`/pocs/${id}/status`, body),
 			deletePoc: (id: number) => run(api(`/pocs/${id}`, { method: 'DELETE' })),
 			pocNote: (id: number, body: string) => post<Activity>(`/pocs/${id}/note`, { body }),
@@ -139,6 +150,17 @@ export function useActions() {
 				run(api<PocAdmin>(`/poc-admins/${id}`, { method: 'PATCH', body: data })),
 			deleteAdmin: (id: number) => run(api(`/poc-admins/${id}`, { method: 'DELETE' })),
 			syncHubspot: (id: number) => post<Poc>(`/pocs/${id}/hubspot/sync`),
+			/** Sube varios archivos a la documentación de una RFP, uno detrás de otro. */
+			uploadDocuments: (pocId: number, files: File[]) =>
+				run(
+					(async () => {
+						const out: RfpDocument[] = [];
+						for (const f of files) out.push(await upload<RfpDocument>(`/pocs/${pocId}/documents`, f));
+						return out;
+					})(),
+				),
+			deleteDocument: (pocId: number, name: string) =>
+				run(api(`/pocs/${pocId}/documents/${encodeURIComponent(name)}`, { method: 'DELETE' })),
 			setAccountHubspot: (name: string, hubspot: string | null) =>
 				run(api(`/accounts/${encodeURIComponent(name)}/hubspot`, { method: 'PUT', body: { hubspot } })),
 			saveSettings: (patch: Partial<Settings>) => run(api<Settings>('/settings', { method: 'PATCH', body: patch })),

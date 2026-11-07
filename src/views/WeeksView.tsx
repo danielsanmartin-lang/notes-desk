@@ -11,6 +11,15 @@ import { useUI } from '../lib/store';
 import { useListIds, ViewBody, ViewHeader } from './common';
 
 const POC_EVENT: Record<string, string> = { paused: 'En pausa', resumed: 'Reanudada', won: 'Ganada', lost: 'Perdida' };
+const RFP_EVENT: Record<string, string> = { resumed: 'En preparación', submitted: 'Presentada', won: 'Adjudicada', lost: 'Perdida', declined: 'Descartada' };
+const eventLabel = (e: WeekLogEntry) => (e.poc_kind === 'rfp' ? RFP_EVENT : POC_EVENT)[e.kind] ?? e.kind;
+
+/** Nombres de PoCs y RFPs de la semana; las RFPs, marcadas. */
+function projectNames(done: Item[], events: WeekLogEntry[]) {
+	const rfps = new Set([...done.filter((i) => i.poc_kind === 'rfp').map((i) => i.poc_name), ...events.filter((e) => e.poc_kind === 'rfp').map((e) => e.poc_name)]);
+	const names = [...new Set([...done.map((i) => i.poc_name), ...events.map((e) => e.poc_name)])].filter(Boolean) as string[];
+	return { names, isRfp: (n: string) => rfps.has(n), title: !rfps.size ? 'PoCs' : rfps.size === names.length ? 'RFPs' : 'PoCs y RFPs' };
+}
 
 /** Resumen en markdown para pegar en el informe semanal o en un mensaje. */
 export function weekMarkdown(w: WeekDetail) {
@@ -22,11 +31,11 @@ export function weekMarkdown(w: WeekDetail) {
 	if (fups.length) out.push('**Follow-ups cerrados**', ...fups.map(line), '');
 	if (tasks.length) out.push('**Tareas completadas**', ...tasks.map(line), '');
 	if (poc.length || w.poc_events.length) {
-		out.push('**PoCs**');
-		const names = [...new Set([...poc.map((i) => i.poc_name), ...w.poc_events.map((e) => e.poc_name)])];
+		const { names, isRfp, title } = projectNames(poc, w.poc_events);
+		out.push(`**${title}**`);
 		for (const n of names) {
-			const ev = w.poc_events.filter((e) => e.poc_name === n).map((e) => POC_EVENT[e.kind] + (e.body ? `: ${e.body}` : ''));
-			out.push(`- ${n}: ${[...poc.filter((i) => i.poc_name === n).map((i) => i.title), ...ev].join('; ')}`);
+			const ev = w.poc_events.filter((e) => e.poc_name === n).map((e) => eventLabel(e) + (e.body ? `: ${e.body}` : ''));
+			out.push(`- ${n}${isRfp(n) && title !== 'RFPs' ? ' (RFP)' : ''}: ${[...poc.filter((i) => i.poc_name === n).map((i) => i.title), ...ev].join('; ')}`);
 		}
 		out.push('');
 	}
@@ -100,7 +109,8 @@ export function WeeksView({ week }: { week?: string }) {
 	};
 
 	const byCat = (cat: Item['category']) => (w?.done ?? []).filter((i) => i.category === cat);
-	const pocNames = [...new Set([...byCat('poc').map((i) => i.poc_name), ...(w?.poc_events ?? []).map((e) => e.poc_name)])].filter(Boolean) as string[];
+	const projects = projectNames(byCat('poc'), w?.poc_events ?? []);
+	const pocNames = projects.names;
 	const empty = w && !w.done.length && !w.touches.length && !w.replies.length && !w.poc_events.length;
 
 	return (
@@ -165,7 +175,7 @@ export function WeeksView({ week }: { week?: string }) {
 							)}
 							{pocNames.length > 0 && (
 								<section className="mb-6">
-									<SectionTitle>PoCs</SectionTitle>
+									<SectionTitle>{projects.title}</SectionTitle>
 									{pocNames.map((n) => {
 										const items = byCat('poc').filter((i) => i.poc_name === n);
 										const color = items[0]?.poc_color ?? null;
@@ -173,6 +183,7 @@ export function WeeksView({ week }: { week?: string }) {
 											<div key={n} className="mb-3">
 												<div className="mb-1 flex items-center gap-2 px-2 text-[12.5px] font-semibold">
 													<PocDot color={color} /> {n}
+													{projects.isRfp(n) && projects.title !== 'RFPs' && <span className="font-normal text-fg-3">RFP</span>}
 												</div>
 												{items.map((i) => (
 													<DoneLine key={i.id} item={i} />
@@ -180,7 +191,7 @@ export function WeeksView({ week }: { week?: string }) {
 												{w.poc_events
 													.filter((e) => e.poc_name === n)
 													.map((e) => (
-														<LogLine key={e.id} entry={{ ...e, title: POC_EVENT[e.kind] }} icon={<FlaskConical />} />
+														<LogLine key={e.id} entry={{ ...e, title: eventLabel(e) }} icon={<FlaskConical />} />
 													))}
 											</div>
 										);

@@ -21,5 +21,8 @@ contextBridge.exposeInMainWorld('zd', {
 	closeQuick: () => ipcRenderer.send('zd:close-quick'),
 	openItem: (id) => ipcRenderer.send('zd:open-item', id),
 	showInFolder: (file) => ipcRenderer.send('zd:show-in-folder', file),
+	openDocument: (pocId, name) => ipcRenderer.send('zd:open-document', pocId, name),
+	revealDocument: (pocId, name) => ipcRenderer.send('zd:reveal-document', pocId, name),
+	openDocumentsFolder: (pocId) => ipcRenderer.send('zd:open-documents-folder', pocId),
 	openExternal: (url) => ipcRenderer.send('zd:open-external', url),
 });

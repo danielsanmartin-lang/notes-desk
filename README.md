@@ -27,6 +27,18 @@ place. Everything is stored in a local SQLite database: no account, no cloud.
     gone without answering, and for how long.
   - The header shows the **next step**, with its date.
   - Suggested project tasks (set in Settings) are added with one click.
+- **RFPs** (tenders), with their own **RFPs in progress** and **Closed RFPs** sections. An RFP works like a
+  project (checklist, contacts, notes, history, HubSpot deal, account) and adds what a tender needs:
+  - Key dates: **questions deadline**, **submission deadline** (with a countdown on the card, the page
+    and the sidebar) and **expected award date**, plus the **tender portal** link and the **file number**.
+  - Stages: *In preparation* → *Submitted* → *Awarded*, *Lost* or *Declined* (we did not bid). Submitted
+    RFPs keep their tasks on Home; closed ones move to **Closed RFPs**, with their win rate and amount.
+  - **Documentation**: drop PDFs, Word or Excel files onto the RFP (or use *Add*) to keep the tender
+    documents and your proposal one click away. *Open* uses the Mac's app for that file, *Show in Finder*
+    reveals it, and removing one sends it to the macOS Trash.
+  - Home shows **RFPs due soon**: questions and submission deadlines in the next 7 days (an overdue
+    submission stays, in red, until the RFP is submitted or closed). The daily digest lists them too.
+  - Suggested RFP tasks (set in Settings) are added with one click.
 - **Accounts**: built automatically from the company of each task and project (ignoring case and
   accents). Each account gathers what is on you, what is waiting, its projects, contacts, what was
   done in the last 30 days and its history.
@@ -41,10 +53,10 @@ a **message template** (copy / open in WhatsApp / email) and its **log**.
 
 ### Quick entry
 
-In each list's "Add…" field, a menu opens as you type with the **type** (Task, Follow-up or a
-project) and the **date** (No date, Today, Tomorrow, In 3 working days, Friday, next Monday… or
-another one). What the text already says is preselected; what you pick in the menu wins. Tab cycles
-the type. If the company has an active project, the field asks whether the task belongs in it.
+In each list's "Add…" field, a menu opens as you type with the **type** (Task, Follow-up or Note),
+the **company**, the **project** or **RFP** it belongs to, and the **date** (No date, Today, Tomorrow,
+In 3 working days, Friday, next Monday… or another one). What the text already says is preselected;
+what you pick in the menu wins. Tab cycles the type. The company's own projects and RFPs come first.
 
 The same parsing works in **quick capture** (⌥Space from any app). Dates are understood in Spanish:
 
@@ -88,7 +100,11 @@ the Dock. Closing the window does not quit the app (⌘Q does).
 
 - Database: `~/Library/Application Support/Notes Desk/notes-desk.db` (SQLite, WAL mode).
 - Automatic backups: one per day in the `backups/` folder next to it, keeping the last 14.
-- Tables: `items` (follow-ups, tasks and project tasks; `state` = `todo`, `waiting`, `done`), `pocs`,
+- RFP documentation: `documentos/rfp-<id>/` next to the database, one folder per RFP (in development,
+  `data/documentos/`). The folder is the source of truth: files dropped there from Finder also show up in
+  the app. The daily backups copy the database, not these files.
+- Tables: `items` (follow-ups, tasks and project tasks; `state` = `todo`, `waiting`, `done`), `pocs` (PoCs
+  and RFPs, told apart by `kind`),
   `activity` (the log: touches, replies, notes, completions, pauses…), `accounts` and `settings`.
   The `v_week_log` view gives every event with its ISO week (`2026-W44`).
 - To read it safely from outside, open it read-only: `sqlite3 "file:/path/to/the.db?mode=ro"`.

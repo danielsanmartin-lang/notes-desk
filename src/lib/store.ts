@@ -7,6 +7,9 @@ export type View =
 	| { kind: 'tasks' }
 	| { kind: 'pocs' }
 	| { kind: 'pocs-closed' }
+	| { kind: 'rfps' }
+	| { kind: 'rfps-closed' }
+	/** Ficha de una PoC o de una RFP (la vista decide por su tipo). */
 	| { kind: 'poc'; id: number }
 	| { kind: 'accounts' }
 	| { kind: 'account'; name: string }
@@ -33,7 +36,8 @@ interface UIState {
 	paletteOpen: boolean;
 	touchOpen: boolean;
 	replyOpen: boolean;
-	newPocOpen: boolean;
+	/** Diálogo de alta abierto: de PoC, de RFP o ninguno. */
+	newPocOpen: false | 'poc' | 'rfp';
 	/** Ids visibles en la lista actual, en orden, para moverse con ↑ ↓. */
 	listIds: number[];
 	/** Cambia para pedir foco en el campo de nueva tarea de la vista. */
@@ -43,7 +47,7 @@ interface UIState {
 	setPaletteOpen: (open: boolean) => void;
 	setTouchOpen: (open: boolean) => void;
 	setReplyOpen: (open: boolean) => void;
-	setNewPocOpen: (open: boolean) => void;
+	setNewPocOpen: (open: false | 'poc' | 'rfp') => void;
 	setListIds: (ids: number[]) => void;
 	focusComposer: () => void;
 }

@@ -13,6 +13,10 @@ export interface ZdBridge {
 	openItem(id: number): void;
 	showInFolder(path: string): void;
 	openExternal(url: string): void;
+	/** Documentación de una RFP: abrir con su app, mostrar en Finder o abrir la carpeta. */
+	openDocument(pocId: number, name: string): void;
+	revealDocument(pocId: number, name: string): void;
+	openDocumentsFolder(pocId: number): void;
 }
 
 declare global {

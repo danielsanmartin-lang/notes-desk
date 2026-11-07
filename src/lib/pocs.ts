@@ -1,13 +1,49 @@
-// Región, importe, filtros y orden de las PoCs. Todo en el cliente: son decenas, no miles.
+// Región, importe, filtros y orden de las PoCs y RFPs. Todo en el cliente: son decenas, no miles.
 
 import { useState } from 'react';
-import { pocAmount as sharedPocAmount, regionOf, sumByCurrency } from '../../shared/pocs.js';
+import { pocAmount as sharedPocAmount, regionOf, rfpStage as sharedRfpStage, sumByCurrency } from '../../shared/pocs.js';
 import { daysBetween } from '../../shared/dates.js';
 import { fold } from '../../shared/quickparse.js';
-import type { Item, Poc } from '../api/types';
+import type { Item, Poc, PocKind, RfpStage } from '../api/types';
 import { money } from './format';
 
 export type Region = 'iberia' | 'latam' | 'none';
+
+/** Cómo se llama cada tipo en la interfaz. */
+export const KIND_LABEL: Record<PocKind, string> = { poc: 'PoC', rfp: 'RFP' };
+export const kindLabel = (kind: PocKind | null | undefined) => KIND_LABEL[kind ?? 'poc'];
+
+/** Etapa de una RFP: en preparación, presentada, adjudicada, perdida o descartada. */
+export const rfpStage = (p: Pick<Poc, 'status' | 'submitted_at' | 'close_reason'>): RfpStage => sharedRfpStage(p) as RfpStage;
+export const RFP_STAGE_LABEL: Record<RfpStage, string> = {
+	preparing: 'En preparación',
+	submitted: 'Presentada',
+	won: 'Adjudicada',
+	lost: 'Perdida',
+	declined: 'Descartada',
+};
+
+/** Concluida: ganada o perdida (en una RFP, también descartada, que se guarda como perdida). */
+export const isClosed = (p: Pick<Poc, 'status'>) => p.status === 'won' || p.status === 'lost';
+
+/**
+ * Cuenta atrás de la entrega de una RFP mientras no esté presentada: «Entrega en 5 días», «Entrega hoy»,
+ * «Entrega vencida hace 2 días». Null si no tiene fecha, ya se presentó o está concluida.
+ */
+export function deadlineInfo(p: Pick<Poc, 'submission_deadline' | 'submitted_at' | 'status'>, today: string) {
+	if (!p.submission_deadline || p.submitted_at || p.status !== 'active') return null;
+	const d = daysBetween(today, p.submission_deadline);
+	const label =
+		d < 0
+			? `Entrega vencida hace ${-d} ${d === -1 ? 'día' : 'días'}`
+			: d === 0
+				? 'Entrega hoy'
+				: d === 1
+					? 'Entrega mañana'
+					: `Entrega en ${d} días`;
+	const tone: 'danger' | 'warn' | 'neutral' = d <= 0 ? 'danger' : d <= 7 ? 'warn' : 'neutral';
+	return { days: d, label, short: d < 0 ? 'Vencida' : d === 0 ? 'Hoy' : `${d} d`, tone };
+}
 
 export const region = (country: string | null): Region => regionOf(country);
 /** Divisa por defecto según el país: euros en Iberia, dólares en LATAM. */
@@ -56,11 +92,20 @@ export function openSince(p: Pick<Poc, 'start_date' | 'created_at' | 'status' | 
 	return { days: d, label: d === 0 ? 'Abierta hoy' : `${d} ${d === 1 ? 'día abierta' : 'días abierta'}`, future: false };
 }
 
-/** Las PoCs vivas (activas o, con `paused`, también en pausa) de una cuenta, comparando sin acentos ni mayúsculas. */
-export function pocsOfAccount<P extends Pick<Poc, 'company' | 'status'>>(pocs: P[], company: string | null | undefined, { paused = false } = {}) {
+/**
+ * Las PoCs vivas (activas o, con `paused`, también en pausa) de una cuenta, comparando sin acentos ni mayúsculas.
+ * Con `kind`, solo las de ese tipo (PoC o RFP).
+ */
+export function pocsOfAccount<P extends Pick<Poc, 'company' | 'status' | 'kind'>>(
+	pocs: P[],
+	company: string | null | undefined,
+	{ paused = false, kind }: { paused?: boolean; kind?: PocKind } = {},
+) {
 	const key = fold(company ?? '').trim();
 	if (!key) return [];
-	return pocs.filter((p) => (p.status === 'active' || (paused && p.status === 'paused')) && fold(p.company ?? '').trim() === key);
+	return pocs.filter(
+		(p) => (!kind || p.kind === kind) && (p.status === 'active' || (paused && p.status === 'paused')) && fold(p.company ?? '').trim() === key,
+	);
 }
 
 /** El partner con el que va una tarea: el de su PoC o, si es de la cuenta, el de una PoC viva de esa cuenta. */
@@ -69,7 +114,11 @@ export function partnerOf(pocs: Poc[], item: Pick<Item, 'poc_id' | 'company'>) {
 	return pocsOfAccount(pocs, item.company, { paused: true }).find((p) => p.partner)?.partner ?? null;
 }
 
-export type StatusFilter = 'all' | 'active' | 'paused' | 'won' | 'lost';
+/** Estado de una PoC o etapa de una RFP. */
+export type StatusFilter = 'all' | 'active' | 'paused' | 'won' | 'lost' | 'preparing' | 'submitted' | 'declined';
+
+/** Estado con el que se filtra: el de la PoC o la etapa de la RFP (una descartada no es «perdida»). */
+const stateOf = (p: Poc): StatusFilter => (p.kind === 'rfp' ? rfpStage(p) : p.status);
 
 export interface PocFilterState {
 	q: string;
@@ -85,14 +134,14 @@ export function filterPocs(pocs: Poc[], f: PocFilterState) {
 	const q = fold(f.q.trim());
 	return pocs.filter(
 		(p) =>
-			(f.status === 'all' || p.status === f.status) &&
+			(f.status === 'all' || stateOf(p) === f.status) &&
 			(!f.country || p.country === f.country) &&
 			(!f.owner || (p.owner ?? '') === f.owner) &&
-			(!q || fold(`${p.name} ${p.company ?? ''} ${p.partner ?? ''} ${p.owner ?? ''}`).includes(q)),
+			(!q || fold(`${p.name} ${p.company ?? ''} ${p.partner ?? ''} ${p.owner ?? ''} ${p.tender_ref ?? ''}`).includes(q)),
 	);
 }
 
-export type SortKey = 'amount' | 'start' | 'created' | 'close' | 'progress' | 'activity' | 'name';
+export type SortKey = 'amount' | 'start' | 'deadline' | 'award' | 'created' | 'close' | 'progress' | 'activity' | 'name';
 export interface PocSort {
 	key: SortKey;
 	dir: 'asc' | 'desc';
@@ -101,6 +150,8 @@ export interface PocSort {
 export const SORT_LABEL: Record<SortKey, string> = {
 	amount: 'Importe',
 	start: 'Fecha de inicio',
+	deadline: 'Fecha de entrega',
+	award: 'Adjudicación prevista',
 	created: 'Fecha de creación',
 	close: 'Cierre previsto',
 	progress: 'Progreso',
@@ -108,10 +159,18 @@ export const SORT_LABEL: Record<SortKey, string> = {
 	name: 'Nombre',
 };
 
+/** Órdenes que tienen sentido en cada tablero. */
+export const SORTS: Record<PocKind, SortKey[]> = {
+	poc: ['amount', 'start', 'created', 'close', 'progress', 'activity', 'name'],
+	rfp: ['deadline', 'amount', 'award', 'created', 'close', 'progress', 'activity', 'name'],
+};
+
 /** Dirección natural al elegir cada orden (lo más grande / reciente primero, salvo nombre y cierre). */
 export const DEFAULT_DIR: Record<SortKey, 'asc' | 'desc'> = {
 	amount: 'desc',
 	start: 'desc',
+	deadline: 'asc',
+	award: 'asc',
 	created: 'desc',
 	close: 'asc',
 	progress: 'desc',
@@ -125,6 +184,10 @@ const sortValue = (p: Poc, key: SortKey): number | string | null => {
 			return pocAmount(p)?.value ?? null;
 		case 'start':
 			return p.start_date;
+		case 'deadline':
+			return p.submission_deadline;
+		case 'award':
+			return p.award_date;
 		case 'created':
 			return p.created_at;
 		case 'close':

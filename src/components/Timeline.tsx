@@ -1,8 +1,11 @@
 import {
+	Award,
+	Ban,
 	Building2,
 	CalendarClock,
 	CircleCheck,
 	Pause,
+	PencilRuler,
 	Play,
 	Reply,
 	Send,
@@ -22,9 +25,10 @@ import { ChannelIcon } from './bits';
 const DELETABLE = new Set(['note', 'touch', 'reply']);
 
 function describe(a: Activity, today: string, inPoc?: boolean): { icon: ReactNode; title: string; tone: string } {
+	const rfp = a.poc_kind === 'rfp';
 	switch (a.kind) {
 		case 'created':
-			return { icon: <Sparkles />, title: a.poc_id && !a.item_id ? 'PoC creada' : inPoc ? 'Tarea añadida' : 'Creada', tone: 'text-fg-3' };
+			return { icon: <Sparkles />, title: a.poc_id && !a.item_id ? `${rfp ? 'RFP creada' : 'PoC creada'}` : inPoc ? 'Tarea añadida' : 'Creada', tone: 'text-fg-3' };
 		case 'touch':
 			return {
 				icon: a.channel ? <ChannelIcon channel={a.channel} className="size-3.5" /> : <Send />,
@@ -52,11 +56,15 @@ function describe(a: Activity, today: string, inPoc?: boolean): { icon: ReactNod
 				tone: 'text-warn bg-warn-soft',
 			};
 		case 'resumed':
-			return { icon: <Play />, title: 'Reanudada', tone: 'text-ok' };
+			return rfp ? { icon: <PencilRuler />, title: 'RFP en preparación', tone: 'text-accent-text' } : { icon: <Play />, title: 'Reanudada', tone: 'text-ok' };
+		case 'submitted':
+			return { icon: <Send />, title: 'RFP presentada', tone: 'text-teal bg-teal-soft' };
 		case 'won':
-			return { icon: <Trophy />, title: 'PoC ganada', tone: 'text-ok bg-ok-soft' };
+			return rfp ? { icon: <Award />, title: 'RFP adjudicada', tone: 'text-ok bg-ok-soft' } : { icon: <Trophy />, title: 'PoC ganada', tone: 'text-ok bg-ok-soft' };
 		case 'lost':
-			return { icon: <ThumbsDown />, title: 'PoC perdida', tone: 'text-danger bg-danger-soft' };
+			return { icon: <ThumbsDown />, title: rfp ? 'RFP perdida' : 'PoC perdida', tone: 'text-danger bg-danger-soft' };
+		case 'declined':
+			return { icon: <Ban />, title: 'RFP descartada', tone: 'text-fg-2 bg-hover' };
 	}
 }
 

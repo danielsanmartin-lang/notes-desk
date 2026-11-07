@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { backupDaily, copyDb, openDb } from '../server/db.js';
+import { createDocuments } from '../server/documents.js';
 import { startServer } from '../server/index.js';
 import { createRepo } from '../server/repo.js';
 import { themeById } from '../shared/themes.js';
@@ -155,6 +156,25 @@ ipcMain.on('zd:open-external', (_e, url) => openExternal(String(url)));
 ipcMain.on('zd:show-in-folder', (_e, file) => {
 	if (file === ctx.dbPath) shell.showItemInFolder(file);
 });
+// Documentos de una RFP: la ruta la resuelve documents (nunca sale de la carpeta de esa RFP).
+const onDocument = (fn) => (_e, pocId, name) => {
+	try {
+		fn(ctx.documents.pathOf(pocId, name));
+	} catch (err) {
+		console.warn('Documento', err.message);
+	}
+};
+ipcMain.on('zd:open-document', onDocument((file) => shell.openPath(file)));
+ipcMain.on('zd:reveal-document', onDocument((file) => shell.showItemInFolder(file)));
+ipcMain.on('zd:open-documents-folder', (_e, pocId) => {
+	try {
+		const dir = ctx.documents.folder(pocId);
+		fs.mkdirSync(dir, { recursive: true });
+		shell.openPath(dir);
+	} catch (err) {
+		console.warn('Carpeta de documentos', err.message);
+	}
+});
 
 app.on('second-instance', () => showMain());
 app.on('activate', () => showMain());
@@ -174,14 +194,17 @@ app.whenReady().then(async () => {
 	repo.housekeeping();
 	const backupsDir = path.join(path.dirname(dbPath), 'backups');
 	const token = DEV ? null : crypto.randomBytes(24).toString('hex');
+	// Documentación de las RFPs, junto a la base. Quitar un documento lo manda a la Papelera de macOS.
+	const documents = createDocuments(path.join(path.dirname(dbPath), 'documentos'), { trash: (file) => shell.trashItem(file) });
 	const server = await startServer({
 		repo,
+		documents,
 		port: DEV ? 4100 : 0,
 		token,
 		staticDir: path.join(root, 'dist'),
 		meta: { dbPath, backupsDir, version: app.getVersion(), dev: !app.isPackaged },
 	});
-	ctx = { repo, token, dbPath, baseUrl: DEV ? 'http://localhost:5173' : `http://127.0.0.1:${server.port}` };
+	ctx = { repo, documents, token, dbPath, baseUrl: DEV ? 'http://localhost:5173' : `http://127.0.0.1:${server.port}` };
 
 	const backup = () => backupDaily(db, backupsDir, repo.today()).catch((e) => console.error('Backup', e));
 	backup();

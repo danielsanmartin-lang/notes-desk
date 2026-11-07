@@ -12,6 +12,14 @@ const at = (s) => {
 	clock = new Date(s);
 };
 
+/** Deshace la 011 (columnas de RFP y la vista que las usa) para volver a pasar migraciones anteriores. */
+function undoRfps(db) {
+	db.exec('DROP VIEW v_week_log');
+	for (const c of ['kind', 'submission_deadline', 'questions_deadline', 'award_date', 'submitted_at', 'portal_url', 'tender_ref', 'close_reason']) {
+		db.exec(`ALTER TABLE pocs DROP COLUMN ${c}`);
+	}
+}
+
 beforeEach(() => {
 	at('2026-10-26T10:00:00');
 	repo = createRepo(openDb(':memory:'), { now: () => clock });
@@ -586,8 +594,9 @@ test('migración 007: lo ya apuntado que nombra al partner queda marcado como de
 	const a = r.createItem({ category: 'task', title: 'He hecho FUP con el partner', company: 'myinvestor' });
 	const b = r.createItem({ category: 'poc', poc_id: poc.id, title: 'Preguntar a Fujitsu' });
 	const c = r.createItem({ category: 'poc', poc_id: poc.id, title: 'Kickoff con el cliente' });
+	undoRfps(db); // la 011 también se vuelve a aplicar
 	db.exec('ALTER TABLE items DROP COLUMN audience');
-	db.exec('ALTER TABLE activity DROP COLUMN company'); // la 009 también se vuelve a aplicar
+	db.exec('ALTER TABLE activity DROP COLUMN company'); // y la 009
 	db.exec('ALTER TABLE pocs DROP COLUMN stale_snoozed_until'); // y la 010
 	db.pragma('user_version = 6');
 	migrate(db);
@@ -606,7 +615,8 @@ test('los datos de la versión anterior se copian con lo que haya en el WAL, y e
 	await copyDb(path.join(dir, 'old.db'), path.join(dir, 'new.db'));
 	oldDb.close();
 	const fresh = new (oldDb.constructor)(path.join(dir, 'new.db'));
-	fresh.exec('ALTER TABLE activity DROP COLUMN company'); // la 009 también se vuelve a aplicar
+	undoRfps(fresh); // la 011 también se vuelve a aplicar
+	fresh.exec('ALTER TABLE activity DROP COLUMN company'); // y la 009
 	fresh.exec('ALTER TABLE pocs DROP COLUMN stale_snoozed_until'); // y la 010
 	fresh.pragma('user_version = 7');
 	migrate(fresh);
@@ -615,4 +625,102 @@ test('los datos de la versión anterior se copian con lo que haya en el WAL, y e
 	assert.equal(r.getSettings().theme, 'electric');
 	fresh.close();
 	fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('RFPs: se crean con su plantilla, su ficha propia y no se mezclan con las PoCs', () => {
+	repo.createPoc({ name: 'Cafam', company: 'Cafam' });
+	const rfp = repo.createPoc(
+		{
+			kind: 'rfp',
+			name: 'Licitación SOC Metro',
+			company: 'Metro de Madrid',
+			submission_deadline: '2026-11-10',
+			questions_deadline: '2026-10-30',
+			award_date: '2026-12-15',
+			portal_url: 'contrataciondelestado.es/expediente/123',
+			tender_ref: 'EXP-2026/123',
+		},
+		{ useTemplate: true },
+	);
+	assert.equal(rfp.kind, 'rfp');
+	assert.equal(rfp.status, 'active');
+	assert.equal(rfp.portal_url, 'https://contrataciondelestado.es/expediente/123');
+	assert.equal(rfp.tender_ref, 'EXP-2026/123');
+	assert.equal(rfp.total, 6, 'usa las «Tareas de RFP», no las de PoC');
+	assert.equal(repo.listItems('poc', { pocId: rfp.id }).items[0].title, 'Leer los pliegos y resumir requisitos');
+	assert.throws(() => repo.updatePoc(rfp.id, { submission_deadline: '10/11/2026' }), /entrega no válida/);
+	assert.throws(() => repo.createPoc({ kind: 'licitacion', name: 'X' }), /Tipo no válido/);
+	assert.equal(repo.updatePoc(rfp.id, { kind: 'poc' }).kind, 'rfp', 'el tipo no cambia después de crearla');
+	assert.deepEqual(
+		repo.counts().pocs.map((p) => [p.name, p.kind]),
+		[['Cafam', 'poc'], ['Licitación SOC Metro', 'rfp']],
+	);
+	assert.equal(repo.stats(4).pocs.active, 1, 'las estadísticas de PoCs no cuentan RFPs');
+	at('2026-11-10T10:00:00');
+	assert.deepEqual(repo.stalePocs().map((p) => p.name), ['Cafam'], 'las RFPs no salen como PoCs sin movimiento');
+});
+
+test('RFPs: preparación → presentada → adjudicada, descartada y vuelta atrás, con su historial', () => {
+	const rfp = repo.createPoc({ kind: 'rfp', name: 'RFP Banco', company: 'Banco' });
+	const task = repo.createItem({ category: 'poc', poc_id: rfp.id, title: 'Responder aclaraciones', due_date: '2026-10-26' });
+	assert.throws(() => repo.setPocStatus(rfp.id, { status: 'paused' }), /no válido para una RFP/);
+
+	let p = repo.setPocStatus(rfp.id, { status: 'submitted' });
+	assert.equal(p.status, 'active');
+	assert.equal(p.submitted_at, '2026-10-26');
+	assert.ok(
+		repo.listItems('today').items.some((i) => i.id === task.id),
+		'las tareas de una RFP presentada siguen saliendo en Inicio',
+	);
+
+	p = repo.setPocStatus(rfp.id, { status: 'won' });
+	assert.equal(p.status, 'won');
+	assert.ok(p.closed_at);
+	assert.ok(!repo.listItems('today').items.some((i) => i.id === task.id), 'concluida: sus tareas salen de Inicio');
+
+	p = repo.setPocStatus(rfp.id, { status: 'submitted' });
+	assert.equal(p.status, 'active');
+	assert.equal(p.submitted_at, '2026-10-26', 'reabrirla como presentada conserva la fecha en que se presentó');
+	assert.equal(p.closed_at, null);
+
+	p = repo.setPocStatus(rfp.id, { status: 'declined' });
+	assert.equal(p.status, 'lost');
+	assert.equal(p.close_reason, 'declined');
+
+	p = repo.setPocStatus(rfp.id, { status: 'preparing' });
+	assert.equal(p.status, 'active');
+	assert.equal(p.submitted_at, null);
+	assert.equal(p.close_reason, null);
+
+	repo.setPocStatus(rfp.id, { status: 'preparing' }); // ya lo está: no se apunta otra vez
+	const kinds = repo.getPoc(rfp.id).activity.filter((a) => a.poc_id === rfp.id).map((a) => a.kind);
+	assert.deepEqual(kinds, ['resumed', 'declined', 'submitted', 'won', 'submitted', 'created']);
+	assert.ok(repo.getPoc(rfp.id).activity.every((a) => a.poc_kind === 'rfp'));
+	assert.deepEqual(
+		repo.getWeek('2026-W44').poc_events.map((e) => [e.kind, e.poc_kind]),
+		[['submitted', 'rfp'], ['won', 'rfp'], ['submitted', 'rfp'], ['declined', 'rfp'], ['resumed', 'rfp']],
+	);
+	// Las PoCs siguen con sus estados de siempre.
+	const poc = repo.createPoc({ name: 'Cafam' });
+	assert.throws(() => repo.setPocStatus(poc.id, { status: 'submitted' }), /Estado no válido/);
+});
+
+test('RFPs con entrega próxima: preguntas y entrega en 7 días, vencidas hasta presentarla', () => {
+	const a = repo.createPoc({ kind: 'rfp', name: 'Alfa', questions_deadline: '2026-10-28', submission_deadline: '2026-11-05' });
+	repo.createPoc({ kind: 'rfp', name: 'Beta', submission_deadline: '2026-11-02' });
+	repo.createPoc({ kind: 'rfp', name: 'Gamma', questions_deadline: '2026-10-20', submission_deadline: '2026-12-01' });
+	repo.createPoc({ name: 'Una PoC', start_date: '2026-10-27' });
+	assert.deepEqual(
+		repo.rfpDeadlines().map((d) => [d.name, d.what, d.days]),
+		[['Alfa', 'questions', 2], ['Beta', 'submission', 7]],
+		'Gamma: sus preguntas ya pasaron y la entrega queda lejos; Alfa entrega en 10 días',
+	);
+	at('2026-11-06T09:00:00');
+	assert.deepEqual(
+		repo.rfpDeadlines().map((d) => [d.name, d.what, d.days]),
+		[['Beta', 'submission', -4], ['Alfa', 'submission', -1]],
+		'las entregas vencidas siguen saliendo',
+	);
+	repo.setPocStatus(a.id, { status: 'submitted' });
+	assert.deepEqual(repo.rfpDeadlines().map((d) => d.name), ['Beta'], 'al presentarla deja de salir');
 });

@@ -1,5 +1,6 @@
 // Avisos nativos: uno por cada tarea con recordatorio cuando llega su hora, y un resumen diario a la hora
-// de los ajustes con lo de hoy (incluidos los follow-ups que toca volver a perseguir y las PoCs sin movimiento).
+// de los ajustes con lo de hoy (incluidos los follow-ups que toca volver a perseguir, las PoCs sin movimiento y las
+// fechas límite de RFP de los próximos días).
 
 import { Notification } from 'electron';
 
@@ -9,7 +10,14 @@ const names = (items) => {
 	return list.length > 3 ? `${list.slice(0, 3).join(', ')} y ${list.length - 3} más` : list.join(', ');
 };
 
-export function digestText(items, stale = []) {
+/** «Acme (entrega hoy)», «Beta (preguntas en 2 días)», «Gamma (entrega vencida)». */
+const deadlineLabel = (d) => {
+	const what = d.what === 'questions' ? 'preguntas' : 'entrega';
+	const when = d.days < 0 ? 'vencida' : d.days === 0 ? 'hoy' : d.days === 1 ? 'mañana' : `en ${d.days} días`;
+	return `${d.name} (${what} ${when})`;
+};
+
+export function digestText(items, stale = [], deadlines = []) {
 	const chase = items.filter((i) => i.state === 'waiting');
 	const fups = items.filter((i) => i.state !== 'waiting' && i.category === 'followup');
 	const rest = items.filter((i) => i.state !== 'waiting' && i.category !== 'followup');
@@ -17,9 +25,17 @@ export function digestText(items, stale = []) {
 	if (chase.length) parts.push(`Volver a perseguir: ${names(chase)}`);
 	if (fups.length) parts.push(`Follow-ups: ${names(fups)}`);
 	if (rest.length) parts.push(`${rest.length} ${rest.length === 1 ? 'tarea' : 'tareas'}`);
+	if (deadlines.length) {
+		const list = deadlines.map(deadlineLabel);
+		parts.push(`RFPs: ${list.length > 3 ? `${list.slice(0, 3).join(', ')} y ${list.length - 3} más` : list.join(', ')}`);
+	}
 	if (stale.length) parts.push(`PoCs sin movimiento: ${names(stale.map((p) => ({ title: p.name })))}`);
 	return {
-		title: items.length ? `Hoy: ${items.length} ${items.length === 1 ? 'pendiente' : 'pendientes'}` : 'PoCs sin movimiento',
+		title: items.length
+			? `Hoy: ${items.length} ${items.length === 1 ? 'pendiente' : 'pendientes'}`
+			: deadlines.length
+				? 'RFPs con entrega próxima'
+				: 'PoCs sin movimiento',
 		body: parts.join(' · '),
 	};
 }
@@ -59,7 +75,10 @@ export function startNotifications({ repo, onChange, actions }) {
 			repo.setSettings({ digest_last: today });
 			const { items } = repo.listItems('today');
 			const stale = repo.stalePocs();
-			if (items.length || stale.length) show({ ...digestText(items, stale), onClick: () => actions.showMain('today') });
+			const deadlines = repo.rfpDeadlines();
+			if (items.length || stale.length || deadlines.length) {
+				show({ ...digestText(items, stale, deadlines), onClick: () => actions.showMain('today') });
+			}
 		}
 	}
 

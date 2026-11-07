@@ -19,6 +19,26 @@ export async function api<T>(path: string, opts: { method?: string; body?: unkno
 	return data as T;
 }
 
+/** Sube un archivo tal cual (sin JSON ni cargarlo en memoria): el servidor lo guarda en streaming. */
+export async function upload<T>(path: string, file: File): Promise<T> {
+	const res = await fetch(`/api${path}`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/octet-stream',
+			'X-Filename': encodeURIComponent(file.name),
+			'X-ZD-Client': clientId,
+			...(token ? { 'X-ZD-Token': token } : {}),
+		},
+		body: file,
+	});
+	const data = await res.json().catch(() => ({}));
+	if (!res.ok) throw new Error(data.error ?? `Error ${res.status}`);
+	return data as T;
+}
+
+/** URL de la API con el token de la sesión (para abrir un archivo en el navegador). */
+export const apiUrl = (path: string) => `/api${path}${token ? `${path.includes('?') ? '&' : '?'}t=${encodeURIComponent(token)}` : ''}`;
+
 /** Avisa cuando otra ventana (o el proceso principal) cambia algo. */
 export function subscribe(onChange: () => void) {
 	const es = new EventSource(`/api/events${token ? `?t=${encodeURIComponent(token)}` : ''}`);

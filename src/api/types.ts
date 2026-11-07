@@ -2,6 +2,10 @@ export type Category = 'followup' | 'task' | 'poc';
 export type Channel = 'email' | 'whatsapp' | 'call' | 'linkedin' | 'meeting';
 export type ItemState = 'todo' | 'waiting' | 'done';
 export type PocStatus = 'active' | 'paused' | 'won' | 'lost';
+/** Una PoC o una RFP: comparten tabla, tareas, contactos e historial. */
+export type PocKind = 'poc' | 'rfp';
+/** Etapa de una RFP (sale de status, submitted_at y close_reason; ver shared/pocs.js). */
+export type RfpStage = 'preparing' | 'submitted' | 'won' | 'lost' | 'declined';
 
 export interface Item {
 	id: number;
@@ -32,6 +36,8 @@ export interface Item {
 	poc_name: string | null;
 	poc_color: string | null;
 	poc_status: PocStatus | null;
+	/** Si su proyecto es una PoC o una RFP. */
+	poc_kind: PocKind | null;
 	parent_title: string | null;
 	/** Enlace a la empresa en HubSpot de la cuenta de la tarea (su empresa o la de su PoC). */
 	account_hubspot_url: string | null;
@@ -53,7 +59,9 @@ export type ActivityKind =
 	| 'paused'
 	| 'resumed'
 	| 'won'
-	| 'lost';
+	| 'lost'
+	| 'submitted'
+	| 'declined';
 
 export interface Activity {
 	id: number;
@@ -71,6 +79,8 @@ export interface Activity {
 	poc_name?: string | null;
 	/** En una PoC: viene de una tarea de su cuenta que no está metida en la PoC. */
 	from_account?: boolean;
+	/** Si lo que cambia de estado es una PoC o una RFP (para decir «RFP adjudicada» y no «PoC ganada»). */
+	poc_kind?: PocKind | null;
 }
 
 export interface ItemList {
@@ -88,6 +98,7 @@ export interface ItemDetail {
 
 export interface Poc {
 	id: number;
+	kind: PocKind;
 	name: string;
 	company: string | null;
 	country: string | null;
@@ -112,6 +123,14 @@ export interface Poc {
 	start_date: string | null;
 	amount: number | null;
 	currency: string | null;
+	/** Solo RFPs: fechas clave, portal de licitación, nº de expediente y cómo terminó. */
+	submission_deadline: string | null;
+	questions_deadline: string | null;
+	award_date: string | null;
+	submitted_at: string | null;
+	portal_url: string | null;
+	tender_ref: string | null;
+	close_reason: 'declined' | null;
 	admin_count: number;
 	/** Desde cuándo espera respuesta lo más antiguo del partner y del cliente (PoC y su cuenta). */
 	partner_waiting_since: string | null;
@@ -146,7 +165,22 @@ export interface Counts {
 	followups_due: number;
 	tasks: number;
 	trash: number;
-	pocs: Pick<Poc, 'id' | 'name' | 'color' | 'status' | 'paused_until' | 'country' | 'total' | 'done' | 'waiting'>[];
+	pocs: Pick<
+		Poc,
+		| 'id'
+		| 'kind'
+		| 'name'
+		| 'color'
+		| 'status'
+		| 'paused_until'
+		| 'country'
+		| 'total'
+		| 'done'
+		| 'waiting'
+		| 'submitted_at'
+		| 'submission_deadline'
+		| 'close_reason'
+	>[];
 }
 
 export interface WeekSummary {
@@ -171,6 +205,7 @@ export interface WeekLogEntry {
 	parent_id: number | null;
 	poc_id: number | null;
 	poc_name: string | null;
+	poc_kind: PocKind | null;
 }
 
 export interface WeekDetail {
@@ -191,6 +226,7 @@ export interface Settings {
 	shortcut: string;
 	open_at_login: boolean;
 	poc_template: string;
+	rfp_template: string;
 	hubspot_portal_id: string;
 	appearance: Appearance;
 	theme: string;
@@ -205,7 +241,7 @@ export interface AccountSummary {
 	poc_items: number;
 	overdue: number;
 	next_due: string | null;
-	pocs: Pick<Poc, 'id' | 'name' | 'color' | 'status'>[];
+	pocs: Pick<Poc, 'id' | 'kind' | 'name' | 'color' | 'status'>[];
 	last_activity_at: string | null;
 	touches_30d: number;
 	hubspot_company_id: string | null;
@@ -277,6 +313,25 @@ export interface StalePoc {
 	/** Fecha desde la que se cuenta: el último cambio, su creación o su fecha de inicio. */
 	since: string;
 	days: number;
+}
+
+/** Fecha límite de una RFP sin presentar que vence en los próximos días (o ya vencida, si es la entrega). */
+export interface RfpDeadline {
+	id: number;
+	name: string;
+	color: string | null;
+	company: string | null;
+	what: 'questions' | 'submission';
+	date: string;
+	/** Días que faltan (negativo: vencida). */
+	days: number;
+}
+
+/** Un archivo de la documentación de una RFP. */
+export interface RfpDocument {
+	name: string;
+	size: number;
+	modified_at: string;
 }
 
 export interface Suggestions {

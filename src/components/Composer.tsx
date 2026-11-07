@@ -1,5 +1,5 @@
 // Campo de "nueva tarea" con lenguaje natural. Al escribir se abre debajo un menú por filas (tipo, empresa,
-// PoC y fecha) con lo que ha entendido del texto ya marcado.
+// PoC, RFP y fecha) con lo que ha entendido del texto ya marcado.
 
 import { Bell, Building2, CalendarDays, Plus, Star, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { formatDay, relativeDay } from '../../shared/dates.js';
 import { fold, parseQuick } from '../../shared/quickparse.js';
 import { useActions, usePocs, useSuggestions, useToday } from '../api/hooks';
-import type { Activity, Category, Item } from '../api/types';
+import type { Activity, Category, Item, Poc, PocKind } from '../api/types';
 import { CATEGORY_LABEL, cx, timeOf } from '../lib/format';
 import { pocsOfAccount } from '../lib/pocs';
 import { useUI } from '../lib/store';
@@ -75,7 +75,7 @@ export function useCreateFromParsed() {
 		const pocId = parsed.pocId ?? (category === 'poc' ? defaults.poc_id : undefined);
 		if (!parsed.title) return null;
 		if (category === 'poc' && !pocId) {
-			toast.error('¿De qué PoC? Escríbela con @, por ejemplo @Cafam');
+			toast.error('¿De qué PoC o RFP? Escríbela con @, por ejemplo @Cafam');
 			return null;
 		}
 		const item = await a.create({
@@ -139,7 +139,7 @@ const KINDS: { value: Kind; label: string }[] = [
 	{ value: 'task', label: 'Tarea' },
 	{ value: 'note', label: 'Nota' },
 ];
-/** PoCs que se ven como botones; el resto, en «Otra PoC…». */
+/** PoCs (o RFPs) que se ven como botones; el resto, en «Otra PoC…» / «Otra RFP…». */
 const POC_CHIPS = 5;
 
 const chipClass = (on: boolean) =>
@@ -271,7 +271,77 @@ function CompanyPicker({ value, onChange, refocus }: { value: string | null; onC
 	);
 }
 
-/** Menú bajo el campo, en filas: tipo, empresa, PoC y fecha, con lo escrito ya preseleccionado. */
+/**
+ * Fila «PoC» o «RFP» del menú: primero las de la empresa elegida y después las últimas añadidas; el resto, en un
+ * desplegable. Las dos filas eligen el mismo proyecto: «Ninguna» se marca si lo elegido no es de esta fila.
+ */
+function ProjectRow({
+	kind,
+	pocs,
+	pocId,
+	company,
+	onPoc,
+	refocus,
+}: {
+	kind: PocKind;
+	pocs: Poc[];
+	pocId: number | null;
+	company: string | null;
+	onPoc: (pocId: number | null) => void;
+	refocus: () => void;
+}) {
+	const noun = kind === 'rfp' ? 'RFP' : 'PoC';
+	const mine = pocs.filter((p) => p.kind === kind);
+	const live = mine.filter((p) => p.status === 'active' || p.status === 'paused' || p.id === pocId);
+	const recent = [...live].sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id - a.id);
+	const ofAccount = pocsOfAccount(mine, company, { paused: true });
+	const ordered = [...ofAccount, ...recent].filter((p, i, arr) => arr.findIndex((x) => x.id === p.id) === i);
+	const shown = ordered.slice(0, POC_CHIPS);
+	const more = ordered.slice(POC_CHIPS);
+	const accountIds = new Set(ofAccount.map((p) => p.id));
+	const selectedHere = pocId != null && mine.some((p) => p.id === pocId);
+	const inMore = pocId != null && more.some((p) => p.id === pocId);
+
+	return (
+		<Row label={noun}>
+			<button type="button" onMouseDown={keep} onClick={() => selectedHere && onPoc(null)} className={chipClass(!selectedHere)}>
+				Ninguna
+			</button>
+			{shown.map((p) => (
+				<button
+					key={p.id}
+					type="button"
+					onMouseDown={keep}
+					onClick={() => onPoc(p.id)}
+					className={chipClass(pocId === p.id)}
+					title={accountIds.has(p.id) ? `${noun} de ${company}` : undefined}
+				>
+					<PocDot color={p.color} className="size-1.5" />
+					{p.name}
+				</button>
+			))}
+			{more.length > 0 && (
+				<select
+					value={inMore ? pocId! : ''}
+					onChange={(e) => {
+						if (e.target.value) onPoc(Number(e.target.value));
+						refocus();
+					}}
+					className={cx('h-6 rounded-md px-1.5 text-[12px] outline-none', inMore ? 'bg-accent text-accent-fg' : 'bg-hover text-fg-2')}
+				>
+					<option value="">Otra {noun}…</option>
+					{more.map((p) => (
+						<option key={p.id} value={p.id}>
+							{p.name}
+						</option>
+					))}
+				</select>
+			)}
+		</Row>
+	);
+}
+
+/** Menú bajo el campo, en filas: tipo, empresa, PoC, RFP y fecha, con lo escrito ya preseleccionado. */
 function ComposerMenu({
 	kind,
 	pocId,
@@ -302,14 +372,7 @@ function ComposerMenu({
 	const { data: pocs = [] } = usePocs();
 	const dates = quickDates(today).slice(0, 6);
 	const custom = dueDate && !dates.some((d) => d.value === dueDate);
-	// PoCs: primero las de la empresa elegida y después las últimas añadidas.
-	const live = pocs.filter((p) => p.status === 'active' || p.status === 'paused' || p.id === pocId);
-	const recent = [...live].sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id - a.id);
-	const ofAccount = pocsOfAccount(pocs, company, { paused: true });
-	const ordered = [...ofAccount, ...recent].filter((p, i, arr) => arr.findIndex((x) => x.id === p.id) === i);
-	const shown = ordered.slice(0, POC_CHIPS);
-	const more = ordered.slice(POC_CHIPS);
-	const accountIds = new Set(ofAccount.map((p) => p.id));
+	const hasRfps = pocs.some((p) => p.kind === 'rfp' && (p.status === 'active' || p.id === pocId));
 
 	return (
 		<div className="space-y-1.5 overflow-hidden pb-2.5 pl-7">
@@ -325,44 +388,8 @@ function ComposerMenu({
 					<Row label="Empresa">
 						<CompanyPicker value={company} onChange={onCompany} refocus={refocus} />
 					</Row>
-					<Row label="PoC">
-						<button type="button" onMouseDown={keep} onClick={() => onPoc(null)} className={chipClass(pocId == null)}>
-							Ninguna
-						</button>
-						{shown.map((p) => (
-							<button
-								key={p.id}
-								type="button"
-								onMouseDown={keep}
-								onClick={() => onPoc(p.id)}
-								className={chipClass(pocId === p.id)}
-								title={accountIds.has(p.id) ? `PoC de ${company}` : undefined}
-							>
-								<PocDot color={p.color} className="size-1.5" />
-								{p.name}
-							</button>
-						))}
-						{more.length > 0 && (
-							<select
-								value={pocId && more.some((p) => p.id === pocId) ? pocId : ''}
-								onChange={(e) => {
-									if (e.target.value) onPoc(Number(e.target.value));
-									refocus();
-								}}
-								className={cx(
-									'h-6 rounded-md px-1.5 text-[12px] outline-none',
-									pocId && more.some((p) => p.id === pocId) ? 'bg-accent text-accent-fg' : 'bg-hover text-fg-2',
-								)}
-							>
-								<option value="">Otra PoC…</option>
-								{more.map((p) => (
-									<option key={p.id} value={p.id}>
-										{p.name}
-									</option>
-								))}
-							</select>
-						)}
-					</Row>
+					<ProjectRow kind="poc" pocs={pocs} pocId={pocId} company={company} onPoc={onPoc} refocus={refocus} />
+					{hasRfps && <ProjectRow kind="rfp" pocs={pocs} pocId={pocId} company={company} onPoc={onPoc} refocus={refocus} />}
 				</>
 			)}
 			{kind !== 'note' && (
@@ -497,7 +524,7 @@ export function Composer({
 		setOverride((o) => ({ ...o, kind: next.value }));
 	};
 
-	// Al elegir una PoC sin empresa puesta, la empresa es la de la PoC.
+	// Al elegir una PoC (o RFP) sin empresa puesta, la empresa es la suya.
 	const choosePoc = (id: number | null) => {
 		const p = id != null ? pocs.find((x) => x.id === id) : undefined;
 		setOverride((o) => ({ ...o, pocId: id, ...(p?.company && !company ? { company: p.company } : {}) }));

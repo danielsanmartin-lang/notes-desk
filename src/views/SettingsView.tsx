@@ -1,4 +1,4 @@
-import { Bell, Check, Database, FlaskConical, FolderOpen, Keyboard, Link2, Monitor, Moon, Palette, Power, Send, Settings, Sun } from 'lucide-react';
+import { Bell, Check, Database, FlaskConical, FolderOpen, Keyboard, Link2, Monitor, Moon, Palette, Power, ScrollText, Send, Settings, Sun } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { CSSProperties, ReactNode } from 'react';
 import { THEMES } from '../../shared/themes.js';
@@ -121,6 +121,7 @@ export function SettingsView() {
 	const a = useActions();
 	const qc = useQueryClient();
 	const template = useDraft(s?.poc_template, (v) => a.saveSettings({ poc_template: v }));
+	const rfpTemplate = useDraft(s?.rfp_template, (v) => a.saveSettings({ rfp_template: v }));
 	useListIds([]);
 	if (!s) return null;
 
@@ -196,6 +197,10 @@ export function SettingsView() {
 
 				<Card icon={<FlaskConical />} title="Tareas de PoC" description="Una por línea. Salen como sugerencias en cada PoC: haces clic en una y pasa a ser una tarea de esa PoC.">
 					<AutoTextarea {...template} className="min-h-[90px] rounded-xl bg-hover px-3 py-2.5 text-[13px] leading-6" />
+				</Card>
+
+				<Card icon={<ScrollText />} title="Tareas de RFP" description="Lo mismo para las RFPs: una por línea, y salen como sugerencias en cada RFP.">
+					<AutoTextarea {...rfpTemplate} className="min-h-[90px] rounded-xl bg-hover px-3 py-2.5 text-[13px] leading-6" />
 				</Card>
 
 				<Card icon={<Link2 />} title="HubSpot" description="Solo lectura: la app nunca escribe en HubSpot.">
