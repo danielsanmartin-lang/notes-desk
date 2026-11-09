@@ -26,8 +26,11 @@ export const RFP_STAGE_LABEL: Record<RfpStage, string> = {
 /** En curso: activa, en pausa o finalizada (la prueba terminó, pero el cliente aún no ha decidido). */
 export const isOpenPoc = (p: Pick<Poc, 'status'>) => p.status === 'active' || p.status === 'paused' || p.status === 'finished';
 
-/** Concluida: ganada o perdida (en una RFP, también descartada, que se guarda como perdida). */
-export const isClosed = (p: Pick<Poc, 'status'>) => p.status === 'won' || p.status === 'lost';
+/**
+ * En el tablero de concluidas: ganada, perdida o finalizada (en una RFP, también descartada, que se guarda como
+ * perdida). Una finalizada sigue viva para lo demás (sus tareas, su importe en curso): ver isOpenPoc.
+ */
+export const isClosed = (p: Pick<Poc, 'status'>) => p.status === 'won' || p.status === 'lost' || p.status === 'finished';
 
 /**
  * Cuenta atrás de la entrega de una RFP mientras no esté presentada: «Entrega en 5 días», «Entrega hoy»,

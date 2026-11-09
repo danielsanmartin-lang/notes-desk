@@ -81,7 +81,7 @@ function RegionCard({ r }: { r: Stats['regions'][number] }) {
 			</div>
 			<div className="mt-3 text-[11.5px] text-fg-3">En curso</div>
 			<div className="text-[22px] leading-7 font-semibold">{formatSums(r.amounts) ?? '—'}</div>
-			<div className="mt-3 grid grid-cols-4 gap-2 text-[12px]">
+			<div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-[12px]">
 				<div>
 					<div className="text-fg-3">Activas</div>
 					<div className="text-[15px] font-semibold">{r.active}</div>
@@ -99,9 +99,15 @@ function RegionCard({ r }: { r: Stats['regions'][number] }) {
 					<div className="text-[15px] font-semibold">{r.win_rate == null ? '—' : `${r.win_rate}%`}</div>
 				</div>
 			</div>
+			<div className="mt-3 border-t border-line pt-2.5" title="Desde la fecha de inicio hasta que se finalizó la prueba (o se ganó o perdió)">
+				<div className="text-[11.5px] text-fg-3">Duración media</div>
+				<div className="text-[18px] leading-6 font-semibold">{days(r.avg_days)}</div>
+				<div className="text-[11.5px] text-fg-3">
+					{r.ended ? `De ${plural(r.ended, 'PoC terminada', 'PoCs terminadas')}` : 'Ninguna PoC terminada todavía'}
+				</div>
+			</div>
 			<div className="mt-2 text-[11.5px] text-fg-3">
 				{plural(r.won, 'ganada', 'ganadas')} · {plural(r.lost, 'perdida', 'perdidas')}
-				{r.avg_days != null && ` · ${r.avg_days} días de media`}
 				{r.won_amounts.length > 0 && ` · ganado ${formatSums(r.won_amounts)}`}
 			</div>
 		</div>
@@ -298,7 +304,7 @@ export function StatsView() {
 							);
 						})()}
 						<div className="grid grid-cols-2 gap-4">
-							<ChartCard title="PoCs por país" subtitle="En curso (activas y en pausa)">
+							<ChartCard title="PoCs por país" subtitle="En curso (activas, en pausa y finalizadas)">
 								{s.countries.length ? (
 									<HBars
 										rows={s.countries.map((c) => ({

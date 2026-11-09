@@ -455,12 +455,12 @@ const STATUSES: Record<PocKind, { open: StatusOption[]; closed: StatusOption[] }
 			{ value: 'all', label: 'Todas' },
 			{ value: 'active', label: 'Activas' },
 			{ value: 'paused', label: 'En pausa' },
-			{ value: 'finished', label: 'Finalizadas' },
 		],
 		closed: [
 			{ value: 'all', label: 'Todas' },
 			{ value: 'won', label: 'Ganadas' },
 			{ value: 'lost', label: 'Perdidas' },
+			{ value: 'finished', label: 'Finalizadas' },
 		],
 	},
 	rfp: {
@@ -489,7 +489,7 @@ const BOARD = {
 		closedTitle: 'PoCs concluidas',
 		newLabel: 'Nueva PoC',
 		emptyOpen: ['Ninguna PoC en curso', 'Crea una PoC para llevar su checklist: lo que te toca hacer, lo que esperas del cliente y su deal de HubSpot.'],
-		emptyClosed: ['Aún no hay PoCs concluidas', 'Cuando marques una PoC como ganada o perdida, pasará aquí con su resumen.'],
+		emptyClosed: ['Aún no hay PoCs concluidas', 'Cuando marques una PoC como finalizada, ganada o perdida, pasará aquí con su resumen.'],
 		defaultSort: { key: 'amount', dir: 'desc' } as PocSort,
 	},
 	rfp: {
@@ -512,7 +512,10 @@ function PocBoard({ kind, closed }: { kind: PocKind; closed: boolean }) {
 	const { data: pocs = [], isLoading } = usePocs();
 	const setNewPocOpen = useUI((s) => s.setNewPocOpen);
 	const b = BOARD[kind];
-	const [filters, setFilters] = usePersistentState<PocFilterState>(`zd.${kind}s.${closed ? 'closed' : 'open'}.filters`, EMPTY_FILTERS);
+	const [savedFilters, setFilters] = usePersistentState<PocFilterState>(`zd.${kind}s.${closed ? 'closed' : 'open'}.filters`, EMPTY_FILTERS);
+	const statuses = closed ? STATUSES[kind].closed : STATUSES[kind].open;
+	// Un estado guardado que este tablero ya no ofrece (p. ej. «Finalizadas» en curso, de una versión anterior) cuenta como «Todas».
+	const filters: PocFilterState = statuses.some((s) => s.value === savedFilters.status) ? savedFilters : { ...savedFilters, status: 'all' };
 	const [sort, setSort] = usePersistentState<PocSort>(`zd.${kind}s.sort`, b.defaultSort);
 	const [view, setView] = usePersistentState<{ mode: PocViewMode }>(`zd.${kind}s.view`, { mode: 'cards' });
 	useListIds([]);
@@ -522,6 +525,7 @@ function PocBoard({ kind, closed }: { kind: PocKind; closed: boolean }) {
 	const stageCount = (stage: RfpStage) => base.filter((p) => rfpStage(p) === stage).length;
 	const won = base.filter((p) => p.status === 'won');
 	const lost = base.filter((p) => (kind === 'rfp' ? rfpStage(p) === 'lost' : p.status === 'lost'));
+	const finished = kind === 'poc' ? base.filter((p) => p.status === 'finished').length : 0;
 	const declined = kind === 'rfp' ? stageCount('declined') : 0;
 	const [emptyTitle, emptyText] = closed ? b.emptyClosed : b.emptyOpen;
 	const nouns = (n: number) => plural(n, b.noun[0], b.noun[1]);
@@ -532,12 +536,8 @@ function PocBoard({ kind, closed }: { kind: PocKind; closed: boolean }) {
 				? `${plural(won.length, 'adjudicada', 'adjudicadas')} · ${plural(lost.length, 'perdida', 'perdidas')} · ${plural(declined, 'descartada', 'descartadas')}`
 				: `${stageCount('preparing')} en preparación · ${plural(stageCount('submitted'), 'presentada', 'presentadas')}`
 			: closed
-				? `${plural(won.length, 'ganada', 'ganadas')} · ${plural(lost.length, 'perdida', 'perdidas')}`
-				: [
-						plural(base.filter((p) => p.status === 'active').length, 'activa', 'activas'),
-						`${base.filter((p) => p.status === 'paused').length} en pausa`,
-						plural(base.filter((p) => p.status === 'finished').length, 'finalizada', 'finalizadas'),
-					].join(' · ');
+				? `${plural(won.length, 'ganada', 'ganadas')} · ${plural(lost.length, 'perdida', 'perdidas')} · ${plural(finished, 'finalizada', 'finalizadas')}`
+				: `${plural(base.filter((p) => p.status === 'active').length, 'activa', 'activas')} · ${base.filter((p) => p.status === 'paused').length} en pausa`;
 
 	return (
 		<>
@@ -556,10 +556,14 @@ function PocBoard({ kind, closed }: { kind: PocKind; closed: boolean }) {
 			/>
 			<ViewBody className="max-w-[1180px]">
 				{closed && base.length > 0 && (
-					<div className={cx('mb-5 grid gap-2.5', kind === 'rfp' ? 'grid-cols-5' : 'grid-cols-4')}>
+					<div className="mb-5 grid grid-cols-5 gap-2.5">
 						<StatTile label={kind === 'rfp' ? 'Adjudicadas' : 'Ganadas'} value={won.length} />
 						<StatTile label="Perdidas" value={lost.length} />
-						{kind === 'rfp' && <StatTile label="Descartadas" value={declined} hint="No nos presentamos" />}
+						{kind === 'rfp' ? (
+							<StatTile label="Descartadas" value={declined} hint="No nos presentamos" />
+						) : (
+							<StatTile label="Finalizadas" value={finished} hint="Pendientes de decisión" />
+						)}
 						<StatTile label="Tasa de éxito" value={won.length + lost.length ? `${Math.round((won.length / (won.length + lost.length)) * 100)}%` : '—'} />
 						<StatTile
 							label={kind === 'rfp' ? 'Importe adjudicado' : 'Importe ganado'}
@@ -582,7 +586,7 @@ function PocBoard({ kind, closed }: { kind: PocKind; closed: boolean }) {
 							onSort={setSort}
 							mode={view.mode}
 							onMode={(mode) => setView({ mode })}
-							statuses={closed ? STATUSES[kind].closed : STATUSES[kind].open}
+							statuses={statuses}
 						/>
 						{REGIONS.map((r) => {
 							const list = shown.filter((p) => region(p.country) === r);
@@ -1217,8 +1221,8 @@ export function PocView({ id }: { id: number }) {
 					<div className="mb-4 flex items-center gap-3 rounded-xl bg-teal-soft px-3.5 py-2.5 text-[12.5px]">
 						<Flag className="size-4 text-teal" />
 						<span className="flex-1">
-							{poc.finished_at ? `Prueba finalizada el ${formatDay(poc.finished_at.slice(0, 10), today)}.` : 'Prueba finalizada.'} Falta la decisión
-							del cliente: sus tareas siguen en Inicio y no sale en «PoCs sin movimiento».
+							{poc.finished_at ? `Prueba finalizada el ${formatDay(poc.finished_at.slice(0, 10), today)}.` : 'Prueba finalizada.'} Está en
+							PoCs concluidas hasta que el cliente decida; sus tareas siguen en Inicio.
 						</span>
 						<Button
 							size="xs"

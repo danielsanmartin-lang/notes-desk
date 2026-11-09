@@ -281,7 +281,9 @@ export interface PocSummary {
 	won: number;
 	lost: number;
 	win_rate: number | null;
+	/** Duración media de la prueba en las PoCs terminadas (finalizadas, ganadas o perdidas), y en cuántas se basa. */
 	avg_days: number | null;
+	ended: number;
 	amounts: MoneySum[];
 	won_amounts: MoneySum[];
 }

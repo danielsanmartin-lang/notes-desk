@@ -153,6 +153,8 @@ test('PoC finalizada: sigue en curso con sus tareas, sin aviso de inactividad, y
 	const iberia = repo.stats(12).regions.find((r) => r.region === 'iberia');
 	assert.equal(iberia.finished, 1);
 	assert.equal(iberia.active, 0);
+	assert.equal(iberia.avg_days, 29, 'del 1 al 30 de octubre');
+	assert.equal(iberia.ended, 1);
 
 	// Volver a marcarla finalizada no cambia la fecha; ganarla la conserva.
 	repo.setPocStatus(poc.id, { status: 'finished' });
@@ -172,6 +174,26 @@ test('PoC finalizada: sigue en curso con sus tareas, sin aviso de inactividad, y
 	// Las RFPs no tienen este estado.
 	const rfp = repo.createPoc({ name: 'Licitación', kind: 'rfp' });
 	assert.throws(() => repo.setPocStatus(rfp.id, { status: 'finished' }), /no válido para una RFP/);
+});
+
+test('duración media por región: hasta que se finalizó la prueba o, sin pasar por finalizada, hasta su cierre', () => {
+	// Iberia: finalizada el día 20 y ganada un mes después (cuenta hasta el 20) y otra perdida directamente el día 11.
+	const a = repo.createPoc({ name: 'Iberdrola', country: 'ES', start_date: '2026-10-01' });
+	const b = repo.createPoc({ name: 'Repsol', country: 'PT', start_date: '2026-10-01' });
+	const c = repo.createPoc({ name: 'Primax', country: 'PE', start_date: '2026-10-01' }); // activa: no cuenta
+	at('2026-10-11T10:00:00');
+	repo.setPocStatus(b.id, { status: 'lost' });
+	at('2026-10-21T10:00:00');
+	repo.setPocStatus(a.id, { status: 'finished' });
+	at('2026-11-21T10:00:00');
+	repo.setPocStatus(a.id, { status: 'won' });
+	const regions = Object.fromEntries(repo.stats(12).regions.map((r) => [r.region, r]));
+	assert.equal(regions.iberia.avg_days, 15); // (20 + 10) / 2
+	assert.equal(regions.iberia.ended, 2);
+	assert.equal(regions.latam.avg_days, null);
+	assert.equal(regions.latam.ended, 0);
+	assert.equal(regions.latam.active, 1);
+	assert.ok(c);
 });
 
 test('migración 012: rehacer la tabla de PoCs no borra sus tareas, contactos ni historial', () => {

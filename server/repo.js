@@ -1363,9 +1363,13 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 			const n = (s) => list.filter((p) => p.status === s).length;
 			const won = n('won');
 			const lost = n('lost');
+			// Duración de la prueba en las PoCs que han terminado (finalizadas, ganadas o perdidas): desde su inicio
+			// hasta que se finalizó o, si se ganó o perdió sin pasar por finalizada, hasta su cierre.
 			const durations = list
-				.filter((p) => p.closed_at && (p.status === 'won' || p.status === 'lost'))
-				.map((p) => daysBetween((p.start_date ?? p.created_at).slice(0, 10), p.closed_at.slice(0, 10)))
+				.filter((p) => p.status === 'finished' || p.status === 'won' || p.status === 'lost')
+				.map((p) => ({ start: (p.start_date ?? p.created_at).slice(0, 10), end: (p.finished_at ?? p.closed_at)?.slice(0, 10) }))
+				.filter((x) => x.end)
+				.map((x) => daysBetween(x.start, x.end))
 				.filter((d) => d >= 0);
 			return {
 				active: n('active'),
@@ -1375,6 +1379,7 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 				lost,
 				win_rate: won + lost ? Math.round((won / (won + lost)) * 100) : null,
 				avg_days: durations.length ? Math.round(durations.reduce((x, y) => x + y, 0) / durations.length) : null,
+				ended: durations.length,
 				amounts: sumByCurrency(inCourse(list)),
 				won_amounts: sumByCurrency(list.filter((p) => p.status === 'won')),
 			};
