@@ -10,7 +10,7 @@ import { CHANNEL_LABEL, cx, plural } from '../lib/format';
 import { useUI } from '../lib/store';
 import { useListIds, ViewBody, ViewHeader } from './common';
 
-const POC_EVENT: Record<string, string> = { paused: 'En pausa', resumed: 'Reanudada', won: 'Ganada', lost: 'Perdida' };
+const POC_EVENT: Record<string, string> = { paused: 'En pausa', resumed: 'Reanudada', finished: 'Finalizada', won: 'Ganada', lost: 'Perdida' };
 const RFP_EVENT: Record<string, string> = { resumed: 'En preparación', submitted: 'Presentada', won: 'Adjudicada', lost: 'Perdida', declined: 'Descartada' };
 const eventLabel = (e: WeekLogEntry) => (e.poc_kind === 'rfp' ? RFP_EVENT : POC_EVENT)[e.kind] ?? e.kind;
 

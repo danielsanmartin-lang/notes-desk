@@ -24,14 +24,28 @@ export function migrate(db) {
 		.readdirSync(MIGRATIONS_DIR)
 		.filter((f) => /^\d+_.+\.sql$/.test(f))
 		.sort();
-	for (const f of files) {
-		const version = parseInt(f, 10);
-		if (version <= current) continue;
-		const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, f), 'utf8');
-		db.transaction(() => {
-			db.exec(sql);
-			db.pragma(`user_version = ${version}`);
-		})();
+	const pending = files.filter((f) => parseInt(f, 10) > current);
+	if (!pending.length) return;
+	// Sin claves foráneas mientras se migra (el PRAGMA no surte efecto dentro de una transacción): rehacer una
+	// tabla (crear la nueva, copiar, borrar la vieja, renombrar) no debe borrar en cascada lo que cuelga de ella.
+	// Al final de cada migración se comprueba que no ha roto ninguna referencia (las que ya estuvieran rotas en la
+	// base, p. ej. historial de una tarea que ya no existe, no impiden migrar).
+	const fk = db.pragma('foreign_keys', { simple: true });
+	db.pragma('foreign_keys = OFF');
+	try {
+		const brokenBefore = db.pragma('foreign_key_check').length;
+		for (const f of pending) {
+			const version = parseInt(f, 10);
+			const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, f), 'utf8');
+			db.transaction(() => {
+				db.exec(sql);
+				const broken = db.pragma('foreign_key_check');
+				if (broken.length > brokenBefore) throw new Error(`Migración ${f}: deja ${broken.length - brokenBefore} referencias rotas (${broken.at(-1).table} → ${broken.at(-1).parent})`);
+				db.pragma(`user_version = ${version}`);
+			})();
+		}
+	} finally {
+		if (fk) db.pragma('foreign_keys = ON');
 	}
 }
 

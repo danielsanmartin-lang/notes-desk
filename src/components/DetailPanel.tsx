@@ -31,7 +31,7 @@ import type { Item } from '../api/types';
 import { openExternal } from '../lib/bridge';
 import { CATEGORY_LABEL, cx, daysWaiting, formatMoment, plural } from '../lib/format';
 import { useItemOps } from '../lib/ops';
-import { partnerOf } from '../lib/pocs';
+import { isOpenPoc, partnerOf } from '../lib/pocs';
 import { useUI } from '../lib/store';
 import { Checkbox, DueChip, PocDot, WaitingChip } from './bits';
 import { DatePicker, ReminderPicker } from './DatePicker';
@@ -124,7 +124,7 @@ function DetailBody({
 	// Las subtareas siempre admiten toques: cada una lleva su propio contador.
 	const followable = item.category === 'followup' || item.category === 'poc' || !!item.parent_id;
 	const hasOpenSubs = subtasks.some((x) => x.state !== 'done');
-	const activePocs = pocs.filter((p) => p.status === 'active' || p.status === 'paused');
+	const activePocs = pocs.filter(isOpenPoc);
 	const pocCompany = pocs.find((p) => p.id === item.poc_id)?.company ?? null;
 	const partner = partnerOf(pocs, item);
 

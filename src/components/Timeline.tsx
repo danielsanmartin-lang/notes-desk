@@ -4,6 +4,7 @@ import {
 	Building2,
 	CalendarClock,
 	CircleCheck,
+	Flag,
 	Pause,
 	PencilRuler,
 	Play,
@@ -57,6 +58,8 @@ function describe(a: Activity, today: string, inPoc?: boolean): { icon: ReactNod
 			};
 		case 'resumed':
 			return rfp ? { icon: <PencilRuler />, title: 'RFP en preparación', tone: 'text-accent-text' } : { icon: <Play />, title: 'Reanudada', tone: 'text-ok' };
+		case 'finished':
+			return { icon: <Flag />, title: 'PoC finalizada, pendiente de decisión', tone: 'text-teal bg-teal-soft' };
 		case 'submitted':
 			return { icon: <Send />, title: 'RFP presentada', tone: 'text-teal bg-teal-soft' };
 		case 'won':

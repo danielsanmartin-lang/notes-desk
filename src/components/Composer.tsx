@@ -10,7 +10,7 @@ import { fold, parseQuick } from '../../shared/quickparse.js';
 import { useActions, usePocs, useSuggestions, useToday } from '../api/hooks';
 import type { Activity, Category, Item, Poc, PocKind } from '../api/types';
 import { CATEGORY_LABEL, cx, timeOf } from '../lib/format';
-import { pocsOfAccount } from '../lib/pocs';
+import { isOpenPoc, pocsOfAccount } from '../lib/pocs';
 import { useUI } from '../lib/store';
 import { Chip, PocDot } from './bits';
 import { quickDates } from './DatePicker';
@@ -292,7 +292,7 @@ function ProjectRow({
 }) {
 	const noun = kind === 'rfp' ? 'RFP' : 'PoC';
 	const mine = pocs.filter((p) => p.kind === kind);
-	const live = mine.filter((p) => p.status === 'active' || p.status === 'paused' || p.id === pocId);
+	const live = mine.filter((p) => isOpenPoc(p) || p.id === pocId);
 	const recent = [...live].sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id - a.id);
 	const ofAccount = pocsOfAccount(mine, company, { paused: true });
 	const ordered = [...ofAccount, ...recent].filter((p, i, arr) => arr.findIndex((x) => x.id === p.id) === i);

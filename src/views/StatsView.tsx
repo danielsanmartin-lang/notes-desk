@@ -81,7 +81,7 @@ function RegionCard({ r }: { r: Stats['regions'][number] }) {
 			</div>
 			<div className="mt-3 text-[11.5px] text-fg-3">En curso</div>
 			<div className="text-[22px] leading-7 font-semibold">{formatSums(r.amounts) ?? '—'}</div>
-			<div className="mt-3 grid grid-cols-3 gap-2 text-[12px]">
+			<div className="mt-3 grid grid-cols-4 gap-2 text-[12px]">
 				<div>
 					<div className="text-fg-3">Activas</div>
 					<div className="text-[15px] font-semibold">{r.active}</div>
@@ -89,6 +89,10 @@ function RegionCard({ r }: { r: Stats['regions'][number] }) {
 				<div>
 					<div className="text-fg-3">En pausa</div>
 					<div className="text-[15px] font-semibold">{r.paused}</div>
+				</div>
+				<div title="La prueba terminó y falta la decisión del cliente">
+					<div className="text-fg-3">Finalizadas</div>
+					<div className="text-[15px] font-semibold">{r.finished}</div>
 				</div>
 				<div>
 					<div className="text-fg-3">Éxito</div>

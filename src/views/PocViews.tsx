@@ -4,6 +4,7 @@ import {
 	Building2,
 	Ellipsis,
 	ExternalLink,
+	Flag,
 	FlaskConical,
 	Link2,
 	ListChecks,
@@ -71,6 +72,7 @@ import {
 	formatAmount,
 	hasFilters,
 	isClosed,
+	isOpenPoc,
 	openSince,
 	pocAmount,
 	region,
@@ -100,7 +102,7 @@ const RFP_STAGE_CHIP: Record<RfpStage, { tone: 'accent' | 'teal' | 'ok' | 'dange
 	declined: { tone: 'neutral', icon: <Ban /> },
 };
 
-function StatusChip({ poc, today }: { poc: Pick<Poc, 'kind' | 'status' | 'paused_until' | 'submitted_at' | 'close_reason'>; today: string }) {
+function StatusChip({ poc, today }: { poc: Pick<Poc, 'kind' | 'status' | 'paused_until' | 'finished_at' | 'submitted_at' | 'close_reason'>; today: string }) {
 	if (poc.kind === 'rfp') {
 		const stage = rfpStage(poc);
 		const c = RFP_STAGE_CHIP[stage];
@@ -115,6 +117,12 @@ function StatusChip({ poc, today }: { poc: Pick<Poc, 'kind' | 'status' | 'paused
 		return (
 			<Chip tone="warn" icon={<Pause />}>
 				{poc.paused_until ? `En pausa hasta ${formatDay(poc.paused_until, today)}` : 'En pausa'}
+			</Chip>
+		);
+	if (poc.status === 'finished')
+		return (
+			<Chip tone="teal" icon={<Flag />} title="La prueba terminó; falta la decisión del cliente">
+				{poc.finished_at ? `Finalizada el ${formatDay(poc.finished_at.slice(0, 10), today)}` : 'Finalizada'}
 			</Chip>
 		);
 	if (poc.status === 'won')
@@ -255,7 +263,7 @@ function PocOnlyCard({ poc, today }: { poc: Poc; today: string }) {
 				<StatusChip poc={poc} today={today} />
 				{poc.status !== 'won' && poc.status !== 'lost' && <OpenDays poc={poc} today={today} />}
 				{poc.hubspot_stage && <Chip tone="teal">HubSpot · {poc.hubspot_stage}</Chip>}
-				{poc.partner && (poc.status === 'active' || poc.status === 'paused') ? (
+				{poc.partner && isOpenPoc(poc) ? (
 					<>
 						{poc.client_waiting_since && <Chip tone="warn">Cliente sin responder {waitedFor(poc.client_waiting_since, today)}</Chip>}
 						{poc.partner_waiting_since && (
@@ -295,6 +303,8 @@ function PocOnlyCard({ poc, today }: { poc: Poc; today: string }) {
 						<span className="min-w-0 flex-1 truncate text-fg">{poc.next.title}</span>
 						{poc.next.due_date && <DueChip date={poc.next.due_date} today={today} />}
 					</div>
+				) : poc.status === 'finished' ? (
+					<span className="text-fg-2">Pendiente de la decisión del cliente</span>
 				) : (
 					<span className="text-fg-3">{poc.total ? 'Todas las tareas hechas' : 'Añade la primera tarea'}</span>
 				)}
@@ -445,6 +455,7 @@ const STATUSES: Record<PocKind, { open: StatusOption[]; closed: StatusOption[] }
 			{ value: 'all', label: 'Todas' },
 			{ value: 'active', label: 'Activas' },
 			{ value: 'paused', label: 'En pausa' },
+			{ value: 'finished', label: 'Finalizadas' },
 		],
 		closed: [
 			{ value: 'all', label: 'Todas' },
@@ -522,7 +533,11 @@ function PocBoard({ kind, closed }: { kind: PocKind; closed: boolean }) {
 				: `${stageCount('preparing')} en preparación · ${plural(stageCount('submitted'), 'presentada', 'presentadas')}`
 			: closed
 				? `${plural(won.length, 'ganada', 'ganadas')} · ${plural(lost.length, 'perdida', 'perdidas')}`
-				: `${plural(base.filter((p) => p.status === 'active').length, 'activa', 'activas')} · ${base.filter((p) => p.status === 'paused').length} en pausa`;
+				: [
+						plural(base.filter((p) => p.status === 'active').length, 'activa', 'activas'),
+						`${base.filter((p) => p.status === 'paused').length} en pausa`,
+						plural(base.filter((p) => p.status === 'finished').length, 'finalizada', 'finalizadas'),
+					].join(' · ');
 
 	return (
 		<>
@@ -1046,7 +1061,7 @@ export function PocView({ id }: { id: number }) {
 	if (!poc) return null;
 	const rfp = poc.kind === 'rfp';
 	const noun = rfp ? 'RFP' : 'PoC';
-	const live = poc.status === 'active' || poc.status === 'paused';
+	const live = isOpenPoc(poc);
 
 	const addNote = async () => {
 		if (!noteText.trim()) return;
@@ -1105,6 +1120,11 @@ export function PocView({ id }: { id: number }) {
 									{poc.status !== 'paused' && (
 										<MenuItem icon={<Pause />} onSelect={() => a.setPocStatus(poc.id, { status: 'paused' })}>
 											Pausar
+										</MenuItem>
+									)}
+									{poc.status !== 'finished' && (
+										<MenuItem icon={<Flag />} onSelect={() => a.setPocStatus(poc.id, { status: 'finished' })}>
+											Marcar como finalizada
 										</MenuItem>
 									)}
 									<MenuItem
@@ -1189,6 +1209,29 @@ export function PocView({ id }: { id: number }) {
 						</span>
 						<Button size="xs" icon={<Play className="size-3" />} onClick={() => a.setPocStatus(poc.id, { status: 'active' })}>
 							Reactivar
+						</Button>
+					</div>
+				)}
+
+				{poc.status === 'finished' && (
+					<div className="mb-4 flex items-center gap-3 rounded-xl bg-teal-soft px-3.5 py-2.5 text-[12.5px]">
+						<Flag className="size-4 text-teal" />
+						<span className="flex-1">
+							{poc.finished_at ? `Prueba finalizada el ${formatDay(poc.finished_at.slice(0, 10), today)}.` : 'Prueba finalizada.'} Falta la decisión
+							del cliente: sus tareas siguen en Inicio y no sale en «PoCs sin movimiento».
+						</span>
+						<Button
+							size="xs"
+							icon={<Trophy className="size-3" />}
+							onClick={async () => {
+								await a.setPocStatus(poc.id, { status: 'won' });
+								toast.success(`¡${poc.name} ganada!`);
+							}}
+						>
+							Ganada
+						</Button>
+						<Button size="xs" icon={<ThumbsDown className="size-3" />} onClick={() => a.setPocStatus(poc.id, { status: 'lost' })}>
+							Perdida
 						</Button>
 					</div>
 				)}

@@ -36,5 +36,5 @@ export function rfpStage(p) {
 
 export const RFP_STAGES = ['preparing', 'submitted', 'won', 'lost', 'declined'];
 
-/** ¿Sigue viva? (en curso: activa o en pausa; concluida: ganada, perdida o descartada). */
-export const isOpenPoc = (p) => p.status === 'active' || p.status === 'paused';
+/** ¿Sigue viva? (en curso: activa, en pausa o finalizada a la espera de decisión; concluida: ganada, perdida o descartada). */
+export const isOpenPoc = (p) => p.status === 'active' || p.status === 'paused' || p.status === 'finished';

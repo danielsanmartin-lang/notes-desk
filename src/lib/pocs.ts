@@ -23,6 +23,9 @@ export const RFP_STAGE_LABEL: Record<RfpStage, string> = {
 	declined: 'Descartada',
 };
 
+/** En curso: activa, en pausa o finalizada (la prueba terminó, pero el cliente aún no ha decidido). */
+export const isOpenPoc = (p: Pick<Poc, 'status'>) => p.status === 'active' || p.status === 'paused' || p.status === 'finished';
+
 /** Concluida: ganada o perdida (en una RFP, también descartada, que se guarda como perdida). */
 export const isClosed = (p: Pick<Poc, 'status'>) => p.status === 'won' || p.status === 'lost';
 
@@ -79,12 +82,14 @@ export const totalsByCurrency = (pocs: Poc[]) => formatSums(sumByCurrency(pocs))
 
 /**
  * Cuántos días lleva abierta: desde su fecha de inicio (o desde que se creó, si no tiene). Si aún no ha
- * empezado, cuánto falta; si está concluida, cuánto duró.
+ * empezado, cuánto falta; si está finalizada o concluida, cuánto duró la prueba.
  */
-export function openSince(p: Pick<Poc, 'start_date' | 'created_at' | 'status' | 'closed_at'>, today: string) {
+export function openSince(p: Pick<Poc, 'start_date' | 'created_at' | 'status' | 'closed_at' | 'finished_at'>, today: string) {
 	const start = p.start_date ?? p.created_at.slice(0, 10);
-	if ((p.status === 'won' || p.status === 'lost') && p.closed_at) {
-		const d = Math.max(0, daysBetween(start, p.closed_at.slice(0, 10)));
+	// Finalizada: la prueba duró hasta que terminó, aunque el cliente aún no haya decidido.
+	const end = p.status === 'finished' ? p.finished_at : p.status === 'won' || p.status === 'lost' ? (p.finished_at ?? p.closed_at) : null;
+	if (end) {
+		const d = Math.max(0, daysBetween(start, end.slice(0, 10)));
 		return { days: d, label: `${d} ${d === 1 ? 'día' : 'días'} de PoC`, future: false };
 	}
 	const d = daysBetween(start, today);
@@ -93,7 +98,7 @@ export function openSince(p: Pick<Poc, 'start_date' | 'created_at' | 'status' | 
 }
 
 /**
- * Las PoCs vivas (activas o, con `paused`, también en pausa) de una cuenta, comparando sin acentos ni mayúsculas.
+ * Las PoCs vivas (activas o finalizadas y, con `paused`, también en pausa) de una cuenta, sin acentos ni mayúsculas.
  * Con `kind`, solo las de ese tipo (PoC o RFP).
  */
 export function pocsOfAccount<P extends Pick<Poc, 'company' | 'status' | 'kind'>>(
@@ -104,7 +109,7 @@ export function pocsOfAccount<P extends Pick<Poc, 'company' | 'status' | 'kind'>
 	const key = fold(company ?? '').trim();
 	if (!key) return [];
 	return pocs.filter(
-		(p) => (!kind || p.kind === kind) && (p.status === 'active' || (paused && p.status === 'paused')) && fold(p.company ?? '').trim() === key,
+		(p) => (!kind || p.kind === kind) && (p.status === 'active' || p.status === 'finished' || (paused && p.status === 'paused')) && fold(p.company ?? '').trim() === key,
 	);
 }
 
@@ -115,7 +120,7 @@ export function partnerOf(pocs: Poc[], item: Pick<Item, 'poc_id' | 'company'>) {
 }
 
 /** Estado de una PoC o etapa de una RFP. */
-export type StatusFilter = 'all' | 'active' | 'paused' | 'won' | 'lost' | 'preparing' | 'submitted' | 'declined';
+export type StatusFilter = 'all' | 'active' | 'paused' | 'finished' | 'won' | 'lost' | 'preparing' | 'submitted' | 'declined';
 
 /** Estado con el que se filtra: el de la PoC o la etapa de la RFP (una descartada no es «perdida»). */
 const stateOf = (p: Poc): StatusFilter => (p.kind === 'rfp' ? rfpStage(p) : p.status);

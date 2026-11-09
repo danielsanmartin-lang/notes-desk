@@ -16,7 +16,7 @@ import {
 } from '../shared/dates.js';
 import { companyUrl, parseHubspotCompanyRef, parseHubspotRef } from '../shared/hubspot.js';
 import { isCountry } from '../shared/countries.js';
-import { regionOf, rfpStage, RFP_STAGES, sumByCurrency } from '../shared/pocs.js';
+import { isOpenPoc, regionOf, rfpStage, RFP_STAGES, sumByCurrency } from '../shared/pocs.js';
 import { searchTerms, snippetAround } from '../shared/search.js';
 import { APPEARANCES, THEME_IDS } from '../shared/themes.js';
 
@@ -32,7 +32,7 @@ const notFound = (what) => new HttpError(404, `${what} no existe`);
 
 export const CATEGORIES = ['followup', 'task', 'poc'];
 export const CHANNELS = ['email', 'whatsapp', 'call', 'linkedin', 'meeting'];
-export const POC_STATUSES = ['active', 'paused', 'won', 'lost'];
+export const POC_STATUSES = ['active', 'paused', 'finished', 'won', 'lost'];
 export const POC_KINDS = ['poc', 'rfp'];
 export const POC_COLORS = ['#142CD1', '#1D9E75', '#D85A30', '#7F77DD', '#D4537E', '#BA7517', '#0E9AA7', '#639922'];
 
@@ -74,8 +74,9 @@ const ITEM_SELECT = `
 
 // Visible: no está en la papelera, y si es subtarea, su tarea madre tampoco (ni está completada).
 const VISIBLE = `i.deleted_at IS NULL AND (par.id IS NULL OR (par.deleted_at IS NULL AND par.state <> 'done'))`;
-// Las tareas de una PoC pausada, ganada o perdida desaparecen de Hoy y de Próximos.
-const ACTIVE_POC = `(p.id IS NULL OR p.status = 'active')`;
+// Las tareas de una PoC pausada, ganada o perdida desaparecen de Hoy y de Próximos. Las de una finalizada siguen:
+// la prueba ha terminado, pero queda perseguir la decisión del cliente.
+const ACTIVE_POC = `(p.id IS NULL OR p.status IN ('active', 'finished'))`;
 const OPEN = `i.state <> 'done'`;
 // Una tarea con subtareas abiertas cede su contador (fecha, espera, toques) a cada subtarea: en Hoy y
 // Próximos salen las subtareas, no la tarea madre.
@@ -284,7 +285,7 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 			? all('SELECT id, partner FROM pocs WHERE id = @id AND partner IS NOT NULL', { id: poc_id })
 			: company
 				? all(
-						`SELECT id, partner FROM pocs WHERE partner IS NOT NULL AND status IN ('active', 'paused') AND trim(fold(company)) = @key`,
+						`SELECT id, partner FROM pocs WHERE partner IS NOT NULL AND status IN ('active', 'paused', 'finished') AND trim(fold(company)) = @key`,
 						{ key: fold(company).trim() },
 					)
 				: [];
@@ -660,14 +661,14 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 				 ORDER BY (i.due_date IS NULL), i.due_date, (i.poc_id IS NULL), i.sort_order, i.id LIMIT 1`,
 				{
 					poc: poc.id,
-					key: poc.company && (poc.status === 'active' || poc.status === 'paused') ? fold(poc.company).trim() || null : null,
+					key: poc.company && isOpenPoc(poc) ? fold(poc.company).trim() || null : null,
 				},
 			),
 		) ?? null;
 
 	function listPocs() {
 		return all(
-			`${POC_SELECT} ORDER BY CASE p.status WHEN 'active' THEN 0 WHEN 'paused' THEN 1 ELSE 2 END, p.sort_order, p.id`,
+			`${POC_SELECT} ORDER BY CASE p.status WHEN 'active' THEN 0 WHEN 'paused' THEN 1 WHEN 'finished' THEN 2 ELSE 3 END, p.sort_order, p.id`,
 		).map((p) => ({ ...p, next: nextTask(p) }));
 	}
 
@@ -688,7 +689,7 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 			p,
 		).map((a) => ({ ...activityOut(a), from_account: !!a.from_account }));
 		const account_items =
-			key && (poc.status === 'active' || poc.status === 'paused')
+			key && isOpenPoc(poc)
 				? withSubs(
 						all(
 							`${ITEM_SELECT} WHERE ${VISIBLE} AND i.parent_id IS NULL AND ${OPEN} AND ${fromAccount}
@@ -882,12 +883,15 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 		const until = emptyToNull(paused_until);
 		if (until && !isValidDate(until)) throw bad('Fecha no válida');
 		const t = ts();
-		const kind = { active: 'resumed', paused: 'paused', won: 'won', lost: 'lost' }[status];
+		const kind = { active: 'resumed', paused: 'paused', finished: 'finished', won: 'won', lost: 'lost' }[status];
+		const closing = status === 'won' || status === 'lost';
 		db.transaction(() => {
 			updateRow('pocs', id, {
 				status,
 				paused_until: status === 'paused' ? until : null,
-				closed_at: status === 'won' || status === 'lost' ? t : null,
+				closed_at: closing ? t : null,
+				// Cuándo terminó la prueba: se conserva al ganarla o perderla y se borra si se reactiva o se pausa.
+				finished_at: status === 'finished' ? (poc.status === 'finished' ? poc.finished_at : t) : closing ? poc.finished_at : null,
 				updated_at: t,
 			});
 			if (status !== poc.status || status === 'paused') {
@@ -980,7 +984,7 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 			done,
 			touches: log(['touch']),
 			replies: log(['reply']),
-			poc_events: log(['paused', 'resumed', 'won', 'lost', 'submitted', 'declined']),
+			poc_events: log(['paused', 'resumed', 'finished', 'won', 'lost', 'submitted', 'declined']),
 		};
 	}
 
@@ -1133,7 +1137,7 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 		const items = all(
 			`SELECT fold(${ACCOUNT_EXPR}) AS k, i.category, i.state, i.due_date FROM items i LEFT JOIN pocs p ON p.id = i.poc_id
 			 WHERE i.deleted_at IS NULL AND i.parent_id IS NULL AND i.state <> 'done' AND ${ACCOUNT_EXPR} IS NOT NULL
-			   AND (p.id IS NULL OR p.status IN ('active', 'paused'))`,
+			   AND (p.id IS NULL OR p.status IN ('active', 'paused', 'finished'))`,
 		);
 		for (const r of items) {
 			const e = entry(r.k.trim());
@@ -1354,7 +1358,7 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 		// ── PoCs (con su importe efectivo: el del deal o el manual). Las RFPs no cuentan aquí. ──
 		const allPocs = listPocs().filter((p) => p.kind === 'poc');
 		const inRegion = R ? allPocs.filter((p) => regionOf(p.country) === R) : allPocs;
-		const inCourse = (list) => list.filter((p) => p.status === 'active' || p.status === 'paused');
+		const inCourse = (list) => list.filter(isOpenPoc);
 		const summary = (list) => {
 			const n = (s) => list.filter((p) => p.status === s).length;
 			const won = n('won');
@@ -1366,6 +1370,7 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 			return {
 				active: n('active'),
 				paused: n('paused'),
+				finished: n('finished'),
 				won,
 				lost,
 				win_rate: won + lost ? Math.round((won / (won + lost)) * 100) : null,
@@ -1376,7 +1381,7 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 		};
 		const regions = ['iberia', 'latam', 'none']
 			.map((region) => ({ region, ...summary(allPocs.filter((p) => regionOf(p.country) === region)) }))
-			.filter((r) => r.region !== 'none' || r.active + r.paused + r.won + r.lost > 0);
+			.filter((r) => r.region !== 'none' || r.active + r.paused + r.finished + r.won + r.lost > 0);
 
 		const countryMap = new Map();
 		for (const p of inCourse(inRegion)) {

@@ -6,6 +6,7 @@ import {
 	Building2,
 	CalendarDays,
 	ChevronRight,
+	Flag,
 	FlaskConical,
 	Pause,
 	Plus,
@@ -24,7 +25,7 @@ import { useCounts, useToday } from '../api/hooks';
 import type { Category, Counts, PocKind } from '../api/types';
 import { isElectron } from '../lib/bridge';
 import { cx } from '../lib/format';
-import { deadlineInfo, region, REGION_LABEL, REGIONS } from '../lib/pocs';
+import { deadlineInfo, isOpenPoc, region, REGION_LABEL, REGIONS } from '../lib/pocs';
 import { sameView, useUI, type View } from '../lib/store';
 import { PocDot, ProgressRing } from './bits';
 import { Logo } from './Logo';
@@ -127,7 +128,7 @@ function ProjectSection({ kind, counts }: { kind: PocKind; counts: Counts | unde
 	const [open, setOpen] = useState(true);
 	const meta = SECTION[kind];
 	const all = counts?.pocs.filter((p) => (p.kind ?? 'poc') === kind) ?? [];
-	const live = all.filter((p) => p.status === 'active' || p.status === 'paused');
+	const live = all.filter(isOpenPoc);
 	const closedCount = all.filter((p) => p.status === 'won' || p.status === 'lost').length;
 	// Agrupadas por región (solo se rotula si hay más de una).
 	const byRegion = REGIONS.map((r) => ({ r, list: live.filter((p) => region(p.country) === r) })).filter((g) => g.list.length);
@@ -177,6 +178,8 @@ function ProjectSection({ kind, counts }: { kind: PocKind; counts: Counts | unde
 											right={
 												p.status === 'paused' ? (
 													<Pause className="size-3 text-fg-3" aria-label="En pausa" />
+												) : p.status === 'finished' ? (
+													<Flag className="size-3 text-fg-3" aria-label="Finalizada, pendiente de decisión" />
 												) : kind === 'rfp' && p.submitted_at ? (
 													<Send className="size-3 text-fg-3" aria-label="Presentada" />
 												) : deadline && deadline.days <= 7 ? (

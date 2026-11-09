@@ -135,6 +135,66 @@ test('PoCs: plantilla, progreso, pausa hasta Q1 y reanudación automática', () 
 	assert.equal(repo.getPoc(poc.id).poc.paused_until, null);
 });
 
+test('PoC finalizada: sigue en curso con sus tareas, sin aviso de inactividad, y luego se gana o se pierde', () => {
+	const poc = repo.createPoc({ name: 'Grupo Lar', company: 'Grupo Lar', country: 'ES', start_date: '2026-10-01' });
+	const task = repo.createItem({ category: 'poc', poc_id: poc.id, title: 'Llamar para saber si siguen', due_date: '2026-10-26' });
+
+	at('2026-10-30T10:00:00');
+	let p = repo.setPocStatus(poc.id, { status: 'finished' });
+	assert.equal(p.status, 'finished');
+	assert.equal(p.finished_at, '2026-10-30T10:00:00');
+	assert.equal(p.closed_at, null);
+	assert.deepEqual(repo.listItems('today').items.map((i) => i.id), [task.id], 'sus tareas siguen en Inicio');
+	assert.equal(repo.getPoc(poc.id).poc.next.id, task.id);
+
+	// Meses sin moverse: no sale en «PoCs sin movimiento».
+	at('2027-01-20T10:00:00');
+	assert.deepEqual(repo.stalePocs(), []);
+	const iberia = repo.stats(12).regions.find((r) => r.region === 'iberia');
+	assert.equal(iberia.finished, 1);
+	assert.equal(iberia.active, 0);
+
+	// Volver a marcarla finalizada no cambia la fecha; ganarla la conserva.
+	repo.setPocStatus(poc.id, { status: 'finished' });
+	assert.equal(repo.getPoc(poc.id).poc.finished_at, '2026-10-30T10:00:00');
+	p = repo.setPocStatus(poc.id, { status: 'won', body: 'Firman en enero' });
+	assert.equal(p.status, 'won');
+	assert.equal(p.finished_at, '2026-10-30T10:00:00');
+	assert.equal(p.closed_at, '2027-01-20T10:00:00');
+	assert.deepEqual(
+		repo.getPoc(poc.id).activity.filter((a) => a.poc_id === poc.id && a.kind !== 'created').map((a) => a.kind),
+		['won', 'finished'],
+	);
+
+	// Reactivarla borra la fecha de fin.
+	assert.equal(repo.setPocStatus(poc.id, { status: 'active' }).finished_at, null);
+
+	// Las RFPs no tienen este estado.
+	const rfp = repo.createPoc({ name: 'Licitación', kind: 'rfp' });
+	assert.throws(() => repo.setPocStatus(rfp.id, { status: 'finished' }), /no válido para una RFP/);
+});
+
+test('migración 012: rehacer la tabla de PoCs no borra sus tareas, contactos ni historial', () => {
+	const db = openDb(':memory:');
+	const r = createRepo(db, { now: () => clock });
+	const poc = r.createPoc({ name: 'Iberdrola', company: 'Iberdrola', partner: 'Accenture' });
+	r.createItem({ category: 'poc', poc_id: poc.id, title: 'Kickoff' });
+	r.addPocAdmin(poc.id, { name: 'Ana', kind: 'main' });
+	r.setPocStatus(poc.id, { status: 'paused' });
+	const count = (t) => db.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get().n;
+	const before = ['items', 'poc_admins', 'activity', 'pocs'].map(count);
+	db.pragma('user_version = 11');
+	migrate(db);
+	assert.equal(db.pragma('user_version', { simple: true }), 12);
+	assert.deepEqual(['items', 'poc_admins', 'activity', 'pocs'].map(count), before);
+	assert.equal(db.pragma('foreign_keys', { simple: true }), 1, 'las claves foráneas vuelven a estar activas');
+	assert.equal(r.getPoc(poc.id).poc.partner, 'Accenture');
+	assert.equal(r.getPoc(poc.id).poc.status, 'paused');
+	// Y el borrado en cascada sigue funcionando sobre la tabla nueva.
+	r.deletePoc(poc.id);
+	assert.equal(count('items'), 0);
+});
+
 test('subtareas heredan categoría y PoC; mover una tarea a una PoC mueve sus subtareas', () => {
 	const poc = repo.createPoc({ name: 'Cafam' });
 	const task = repo.createItem({ category: 'task', title: 'Confirmar PoC' });

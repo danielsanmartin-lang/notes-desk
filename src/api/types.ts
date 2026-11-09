@@ -1,7 +1,8 @@
 export type Category = 'followup' | 'task' | 'poc';
 export type Channel = 'email' | 'whatsapp' | 'call' | 'linkedin' | 'meeting';
 export type ItemState = 'todo' | 'waiting' | 'done';
-export type PocStatus = 'active' | 'paused' | 'won' | 'lost';
+/** finished: la prueba terminó y falta la decisión del cliente (luego pasa a ganada o perdida). */
+export type PocStatus = 'active' | 'paused' | 'finished' | 'won' | 'lost';
 /** Una PoC o una RFP: comparten tabla, tareas, contactos e historial. */
 export type PocKind = 'poc' | 'rfp';
 /** Etapa de una RFP (sale de status, submitted_at y close_reason; ver shared/pocs.js). */
@@ -58,6 +59,7 @@ export type ActivityKind =
 	| 'rescheduled'
 	| 'paused'
 	| 'resumed'
+	| 'finished'
 	| 'won'
 	| 'lost'
 	| 'submitted'
@@ -118,6 +120,8 @@ export interface Poc {
 	created_at: string;
 	updated_at: string;
 	closed_at: string | null;
+	/** Cuándo terminó la prueba (se conserva al ganarla o perderla). */
+	finished_at: string | null;
 	owner: string | null;
 	partner: string | null;
 	start_date: string | null;
@@ -273,6 +277,7 @@ export interface MoneySum {
 export interface PocSummary {
 	active: number;
 	paused: number;
+	finished: number;
 	won: number;
 	lost: number;
 	win_rate: number | null;
