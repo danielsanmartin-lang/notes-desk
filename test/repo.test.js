@@ -176,6 +176,31 @@ test('PoC finalizada: sigue en curso con sus tareas, sin aviso de inactividad, y
 	assert.throws(() => repo.setPocStatus(rfp.id, { status: 'finished' }), /no válido para una RFP/);
 });
 
+test('fecha de fin de una PoC: se corrige a mano, con su historial, y solo si ya terminó', () => {
+	const poc = repo.createPoc({ name: 'Inmobiliaria Sol', company: 'Inmobiliaria Sol', country: 'ES', start_date: '2026-09-01' });
+	assert.throws(() => repo.updatePoc(poc.id, { finished_at: '2026-10-01' }), /ya ha terminado/);
+
+	at('2026-10-30T10:00:00');
+	repo.setPocStatus(poc.id, { status: 'finished' });
+	let p = repo.updatePoc(poc.id, { finished_at: '2026-10-20' });
+	assert.equal(p.finished_at, '2026-10-20T10:00:00', 'conserva la hora');
+	const ev = repo.getPoc(poc.id).activity.find((a) => a.kind === 'finished');
+	assert.equal(ev.occurred_at, '2026-10-20T10:00:00', 'el historial se mueve con ella');
+	assert.equal(repo.stats(12).regions.find((r) => r.region === 'iberia').avg_days, 49, 'del 1 de septiembre al 20 de octubre');
+
+	assert.throws(() => repo.updatePoc(poc.id, { finished_at: '2026-10-31' }), /futura/);
+	assert.throws(() => repo.updatePoc(poc.id, { finished_at: '2026-08-31' }), /antes de su fecha de inicio/);
+	assert.throws(() => repo.updatePoc(poc.id, { finished_at: '' }), /no válida/);
+
+	// Ganada directamente, sin pasar por finalizada: la fecha de fin se puede fijar igualmente.
+	const other = repo.createPoc({ name: 'Otra', country: 'ES', start_date: '2026-10-01' });
+	at('2026-10-30T12:00:00');
+	repo.setPocStatus(other.id, { status: 'won' });
+	p = repo.updatePoc(other.id, { finished_at: '2026-10-15' });
+	assert.equal(p.finished_at, '2026-10-15T12:00:00');
+	assert.equal(p.closed_at, '2026-10-30T12:00:00', 'la fecha de la decisión no cambia');
+});
+
 test('duración media por región: hasta que se finalizó la prueba o, sin pasar por finalizada, hasta su cierre', () => {
 	// Iberia: finalizada el día 20 y ganada un mes después (cuenta hasta el 20) y otra perdida directamente el día 11.
 	const a = repo.createPoc({ name: 'Iberdrola', country: 'ES', start_date: '2026-10-01' });

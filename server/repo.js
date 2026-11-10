@@ -816,11 +816,38 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 	}
 
 	function updatePoc(id, data) {
-		requirePoc(id);
+		const poc = requirePoc(id);
 		const d = normalizePoc(data ?? {});
 		if ('sort_order' in (data ?? {})) d.sort_order = Number(data.sort_order);
-		updateRow('pocs', id, { ...d, updated_at: ts() });
+		const finished = 'finished_at' in (data ?? {}) ? finishedAtFor(poc, data.finished_at, d.start_date ?? poc.start_date) : null;
+		if (finished) d.finished_at = finished;
+		db.transaction(() => {
+			updateRow('pocs', id, { ...d, updated_at: ts() });
+			// El historial (y la vista de semanas) cuenta la finalización el día que se corrigió.
+			if (finished) {
+				run(
+					`UPDATE activity SET occurred_at = @at WHERE id = (
+					   SELECT id FROM activity WHERE poc_id = @id AND kind = 'finished' ORDER BY occurred_at DESC, id DESC LIMIT 1)`,
+					{ id, at: finished },
+				);
+			}
+		})();
 		return getPoc(id).poc;
+	}
+
+	/**
+	 * Corrige cuándo terminó la prueba de una PoC ya finalizada, ganada o perdida. Llega como 'YYYY-MM-DD' y
+	 * conserva la hora que tenía (o la del cierre), para que siga ordenándose igual que el resto de marcas de tiempo.
+	 */
+	function finishedAtFor(poc, value, start) {
+		if (poc.kind === 'rfp' || !['finished', 'won', 'lost'].includes(poc.status)) {
+			throw bad('Solo se puede cambiar el fin de una PoC que ya ha terminado');
+		}
+		const v = emptyToNull(value);
+		if (!v || !isValidDate(v)) throw bad('Fecha de fin no válida');
+		if (v > today()) throw bad('La prueba no puede terminar en una fecha futura');
+		if (start && v < start) throw bad('La prueba no puede terminar antes de su fecha de inicio');
+		return v + (poc.finished_at ?? poc.closed_at ?? ts()).slice(10);
 	}
 
 	// ── Personas de la PoC: contacto principal, admins del cliente y contacto del partner ──

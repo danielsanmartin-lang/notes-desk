@@ -21,16 +21,37 @@ export function quickDates(today: string) {
 	].filter((o, i, arr) => arr.findIndex((x) => x.value === o.value) === i);
 }
 
+/** El último `dow` (1 = lunes … 7 = domingo) antes de hoy. */
+const prevDow = (today: string, dow: number) => addDays(today, -((isoDow(today) - dow + 7) % 7 || 7));
+
+/** Atajos hacia atrás, para fechas que ya pasaron (cuándo terminó algo). */
+export function pastDates(today: string) {
+	return [
+		{ label: 'Hoy', value: today },
+		{ label: 'Ayer', value: addDays(today, -1) },
+		{ label: 'El lunes', value: prevDow(today, 1) },
+		{ label: 'El viernes', value: prevDow(today, 5) },
+		{ label: 'Hace 1 semana', value: addDays(today, -7) },
+		{ label: 'Hace 2 semanas', value: addDays(today, -14) },
+	].filter((o, i, arr) => arr.findIndex((x) => x.value === o.value) === i);
+}
+
+/**
+ * Con `past`, la fecha no puede ser posterior a hoy: atajos hacia atrás y calendario hasta hoy, sin el campo
+ * de texto (que interpreta hacia delante: «3 nov» es el próximo).
+ */
 export function DatePicker({
 	value,
 	onChange,
 	trigger,
 	allowClear = true,
+	past = false,
 }: {
 	value: string | null;
 	onChange: (v: string | null) => void;
 	trigger?: ReactNode;
 	allowClear?: boolean;
+	past?: boolean;
 }) {
 	const today = useToday();
 	const [open, setOpen] = useState(false);
@@ -63,7 +84,7 @@ export function DatePicker({
 			}
 		>
 			<div className="grid grid-cols-2 gap-1">
-				{quickDates(today).map((o) => (
+				{(past ? pastDates(today) : quickDates(today)).map((o) => (
 					<button
 						key={o.label}
 						type="button"
@@ -79,16 +100,18 @@ export function DatePicker({
 				))}
 			</div>
 			<div className="mt-2 border-t border-line pt-2">
-				<input
-					autoFocus
-					value={text}
-					onChange={(e) => setText(e.target.value)}
-					onKeyDown={(e) => {
-						if (e.key === 'Enter' && parsed) pick(parsed);
-					}}
-					placeholder="viernes, 15 nov, en 3 días…"
-					className={inputClass}
-				/>
+				{!past && (
+					<input
+						autoFocus
+						value={text}
+						onChange={(e) => setText(e.target.value)}
+						onKeyDown={(e) => {
+							if (e.key === 'Enter' && parsed) pick(parsed);
+						}}
+						placeholder="viernes, 15 nov, en 3 días…"
+						className={inputClass}
+					/>
+				)}
 				{text && (
 					<div className="mt-1.5 px-1 text-[11.5px] text-fg-2">
 						{parsed ? (
@@ -100,10 +123,11 @@ export function DatePicker({
 						)}
 					</div>
 				)}
-				<div className="mt-2 flex items-center gap-2">
+				<div className={cx('flex items-center gap-2', !past && 'mt-2')}>
 					<input
 						type="date"
 						value={value ?? ''}
+						max={past ? today : undefined}
 						onChange={(e) => e.target.value && pick(e.target.value)}
 						className={cx(inputClass, 'flex-1')}
 					/>

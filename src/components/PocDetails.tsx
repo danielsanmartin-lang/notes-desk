@@ -10,6 +10,7 @@ import {
 	Clock,
 	Copy,
 	ExternalLink,
+	Flag,
 	Globe,
 	Handshake,
 	Hash,
@@ -177,10 +178,40 @@ export function PocFacts({ poc, today }: { poc: Poc; today: string }) {
 	return (
 		<div className="mb-4 grid grid-cols-4 gap-2.5">
 			<OwnerFact poc={poc} />
-			<DateFact icon={<CalendarDays />} label="Fecha de inicio" value={poc.start_date} today={today} onChange={(v) => a.updatePoc(poc.id, { start_date: v })} />
+			<DateFact
+				icon={<CalendarDays />}
+				label="Fecha de inicio"
+				value={poc.start_date}
+				today={today}
+				onChange={(v) => a.updatePoc(poc.id, { start_date: v })}
+				hint={<FinishedHint poc={poc} today={today} />}
+			/>
 			<AmountFact poc={poc} />
 			<PartnerFact poc={poc} />
 		</div>
+	);
+}
+
+/** Cuándo terminó la prueba (finalizada, ganada o perdida). */
+export const trialEnd = (poc: Pick<Poc, 'status' | 'finished_at' | 'closed_at'>) =>
+	(poc.status === 'finished' ? poc.finished_at : poc.status === 'won' || poc.status === 'lost' ? (poc.finished_at ?? poc.closed_at) : null)?.slice(0, 10) ?? null;
+
+/** Calendario para corregir cuándo terminó la prueba. `children` es lo que se pulsa para abrirlo. */
+export function FinishedDatePicker({ poc, children }: { poc: Poc; children: ReactNode }) {
+	const a = useActions();
+	return <DatePicker value={trialEnd(poc)} allowClear={false} past onChange={(v) => v && a.updatePoc(poc.id, { finished_at: v })} trigger={children} />;
+}
+
+/** Bajo la fecha de inicio de una PoC que ya terminó: cuándo terminó, con su calendario para corregirlo. */
+function FinishedHint({ poc, today }: { poc: Poc; today: string }) {
+	const end = trialEnd(poc);
+	if (!end) return null;
+	return (
+		<FinishedDatePicker poc={poc}>
+			<button type="button" className="mt-0.5 flex items-center gap-1 text-[11px] text-teal" title="Cambiar la fecha en que terminó la prueba">
+				<Flag className="size-3" /> Fin el {formatDay(end, today)}
+			</button>
+		</FinishedDatePicker>
 	);
 }
 

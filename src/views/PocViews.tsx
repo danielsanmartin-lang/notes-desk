@@ -42,7 +42,7 @@ import { StatTile } from '../components/charts';
 import { Composer } from '../components/Composer';
 import { CountryPicker } from '../components/CountryPicker';
 import { PocFilters, type PocViewMode } from '../components/PocFilters';
-import { Avatar, DeadlineChip, OpenDays, PocFacts, PocPeople, RfpFacts } from '../components/PocDetails';
+import { Avatar, DeadlineChip, FinishedDatePicker, OpenDays, PocFacts, PocPeople, RfpFacts } from '../components/PocDetails';
 import { RfpDocuments } from '../components/RfpDocuments';
 import { DoneSection, Group, TaskList } from '../components/TaskList';
 import { Timeline } from '../components/Timeline';
@@ -1221,7 +1221,18 @@ export function PocView({ id }: { id: number }) {
 					<div className="mb-4 flex items-center gap-3 rounded-xl bg-teal-soft px-3.5 py-2.5 text-[12.5px]">
 						<Flag className="size-4 text-teal" />
 						<span className="flex-1">
-							{poc.finished_at ? `Prueba finalizada el ${formatDay(poc.finished_at.slice(0, 10), today)}.` : 'Prueba finalizada.'} Está en
+							Prueba finalizada
+							{poc.finished_at ? (
+								<>
+									{' el '}
+									<FinishedDatePicker poc={poc}>
+										<button type="button" className="underline decoration-dotted underline-offset-2 hover:text-teal" title="Cambiar la fecha en que terminó la prueba">
+											{formatDay(poc.finished_at.slice(0, 10), today)}
+										</button>
+									</FinishedDatePicker>
+								</>
+							) : null}
+							. Está en
 							PoCs concluidas hasta que el cliente decida; sus tareas siguen en Inicio.
 						</span>
 						<Button
