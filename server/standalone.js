@@ -13,8 +13,8 @@ const dbPath = process.env.NOTES_DESK_DB ?? path.join(root, 'data', 'dev.db');
 const repo = createRepo(openDb(dbPath));
 repo.housekeeping();
 
-// Documentos de las RFPs junto a la base (data/documentos en desarrollo). Aquí, quitar uno lo borra.
-const documents = createDocuments(path.join(path.dirname(dbPath), 'documentos'));
+// Documentos de las PoCs y RFPs junto a la base (data/documentos en desarrollo). Aquí, quitar uno lo borra.
+const documents = createDocuments(path.join(path.dirname(dbPath), 'documentos'), { kindOf: (id) => repo.pocKind(id) });
 
 const { port } = await startServer({ repo, documents, port: Number(process.env.PORT ?? 4100), meta: { dbPath, dev: true } });
 console.log(`Notes Desk API en http://127.0.0.1:${port} · DB ${dbPath}`);

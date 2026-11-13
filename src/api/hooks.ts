@@ -16,7 +16,7 @@ import type {
 	Poc,
 	PocAdmin,
 	RfpDeadline,
-	RfpDocument,
+	PocDocument,
 	Settings,
 	StalePoc,
 	Stats,
@@ -41,11 +41,11 @@ export const usePocs = () => useQuery({ queryKey: ['pocs'], queryFn: () => api<P
 export const usePoc = (id: number) =>
 	useQuery({ queryKey: ['poc', id], queryFn: () => api<{ poc: Poc; contacts: PocAdmin[]; activity: Activity[]; account_items: Item[] }>(`/pocs/${id}`), retry: false });
 export const useRfpDeadlines = () => useQuery({ queryKey: ['rfp-deadlines'], queryFn: () => api<RfpDeadline[]>('/rfps/deadlines') });
-/** Documentación de una RFP. Se refresca al volver a la ventana: lo que se deje en la carpeta desde Finder también sale. */
+/** Documentos de una PoC o RFP. Se refresca al volver a la ventana: lo que se deje en la carpeta desde Finder también sale. */
 export const useDocuments = (pocId: number, enabled = true) =>
 	useQuery({
 		queryKey: ['documents', pocId],
-		queryFn: () => api<RfpDocument[]>(`/pocs/${pocId}/documents`),
+		queryFn: () => api<PocDocument[]>(`/pocs/${pocId}/documents`),
 		enabled,
 		staleTime: 0,
 	});
@@ -150,12 +150,12 @@ export function useActions() {
 				run(api<PocAdmin>(`/poc-admins/${id}`, { method: 'PATCH', body: data })),
 			deleteAdmin: (id: number) => run(api(`/poc-admins/${id}`, { method: 'DELETE' })),
 			syncHubspot: (id: number) => post<Poc>(`/pocs/${id}/hubspot/sync`),
-			/** Sube varios archivos a la documentación de una RFP, uno detrás de otro. */
+			/** Sube varios archivos a los documentos de una PoC o RFP, uno detrás de otro. */
 			uploadDocuments: (pocId: number, files: File[]) =>
 				run(
 					(async () => {
-						const out: RfpDocument[] = [];
-						for (const f of files) out.push(await upload<RfpDocument>(`/pocs/${pocId}/documents`, f));
+						const out: PocDocument[] = [];
+						for (const f of files) out.push(await upload<PocDocument>(`/pocs/${pocId}/documents`, f));
 						return out;
 					})(),
 				),

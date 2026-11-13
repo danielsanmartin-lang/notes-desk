@@ -1,5 +1,6 @@
-// Documentación de una RFP (pliegos, anexos, la propuesta…): se añade arrastrando archivos o con el botón, y se
-// abre con su app. Los archivos viven en una carpeta por RFP junto a la base de datos (ver server/documents.js).
+// Documentos de una PoC (actas, capturas, presupuestos…) o de una RFP (pliegos, anexos, la propuesta…): se añaden
+// arrastrando archivos o con el botón, y se abren con su app. Viven en una carpeta por ficha junto a la base de
+// datos (ver server/documents.js).
 
 import {
 	ExternalLink,
@@ -21,7 +22,7 @@ import { toast } from 'sonner';
 import { formatDay } from '../../shared/dates.js';
 import { apiUrl } from '../api/client';
 import { useActions, useDocuments } from '../api/hooks';
-import type { RfpDocument } from '../api/types';
+import type { PocDocument } from '../api/types';
 import { isElectron, zd } from '../lib/bridge';
 import { cx, plural } from '../lib/format';
 import { Button, Confirm, IconButton, SectionTitle } from './ui';
@@ -53,7 +54,7 @@ function openDoc(pocId: number, name: string) {
 	else window.open(apiUrl(docPath(pocId, name)), '_blank', 'noopener');
 }
 
-function DocRow({ pocId, doc, today, onRemove }: { pocId: number; doc: RfpDocument; today: string; onRemove: () => void }) {
+function DocRow({ pocId, doc, date, today, onRemove }: { pocId: number; doc: PocDocument; date: string; today: string; onRemove: () => void }) {
 	return (
 		<motion.div
 			layout
@@ -67,7 +68,7 @@ function DocRow({ pocId, doc, today, onRemove }: { pocId: number; doc: RfpDocume
 			<DocIcon name={doc.name} />
 			<span className="min-w-0 flex-1 truncate text-[13px]">{doc.name}</span>
 			<span className="shrink-0 text-[11.5px] text-fg-3 tabular-nums">{formatBytes(doc.size)}</span>
-			<span className="w-16 shrink-0 text-right text-[11.5px] text-fg-3">{formatDay(doc.modified_at.slice(0, 10), today)}</span>
+			<span className="w-16 shrink-0 text-right text-[11.5px] text-fg-3">{formatDay(date.slice(0, 10), today)}</span>
 			<div className="flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100">
 				<IconButton label="Abrir" onClick={() => openDoc(pocId, doc.name)}>
 					<ExternalLink className="size-3.5" />
@@ -85,14 +86,35 @@ function DocRow({ pocId, doc, today, onRemove }: { pocId: number; doc: RfpDocume
 	);
 }
 
-/** Bloque «Documentación» de la ficha de una RFP: lista, zona para soltar archivos y botones. */
-export function RfpDocuments({ pocId, today }: { pocId: number; today: string }) {
-	const { data: docs = [], isLoading } = useDocuments(pocId);
+const COPY = {
+	poc: {
+		title: 'Documentos de la PoC',
+		empty: 'Arrastra aquí PDFs, imágenes, presentaciones o cualquier archivo de la PoC, o haz clic para elegirlos.',
+		drop: 'Suelta para adjuntarlos a la PoC',
+		folder: 'la PoC',
+	},
+	rfp: {
+		title: 'Documentación',
+		empty: 'Arrastra aquí los pliegos, anexos y la propuesta (PDF, Word, Excel…) o haz clic para elegirlos.',
+		drop: 'Suelta para añadirlos a la RFP',
+		folder: 'la RFP',
+	},
+};
+
+/**
+ * Bloque de documentos de la ficha de una PoC o RFP: lista, zona para soltar archivos y botones. Las PoCs los
+ * listan en el orden en que se adjuntaron (el último, abajo); las RFPs, por nombre (pliego, anexo 1, anexo 2…).
+ */
+export function Documents({ pocId, kind, today }: { pocId: number; kind: 'poc' | 'rfp'; today: string }) {
+	const copy = COPY[kind];
+	const { data = [], isLoading } = useDocuments(pocId);
+	const byAdded = kind === 'poc';
+	const docs = byAdded ? [...data].sort((x, y) => x.added_at.localeCompare(y.added_at) || x.name.localeCompare(y.name, 'es', { numeric: true })) : data;
 	const a = useActions();
 	const input = useRef<HTMLInputElement>(null);
 	const [over, setOver] = useState(false);
 	const [uploading, setUploading] = useState(0);
-	const [removing, setRemoving] = useState<RfpDocument | null>(null);
+	const [removing, setRemoving] = useState<PocDocument | null>(null);
 
 	const add = async (files: File[]) => {
 		const list = files.filter((f) => f.size > 0 || f.type);
@@ -150,7 +172,7 @@ export function RfpDocuments({ pocId, today }: { pocId: number; today: string })
 					</div>
 				}
 			>
-				Documentación{docs.length > 0 && <span className="ml-1.5 font-normal text-fg-3">{docs.length}</span>}
+				{copy.title}{docs.length > 0 && <span className="ml-1.5 font-normal text-fg-3">{docs.length}</span>}
 			</SectionTitle>
 			<input
 				ref={input}
@@ -167,7 +189,14 @@ export function RfpDocuments({ pocId, today }: { pocId: number; today: string })
 					<div className="flex flex-col py-0.5">
 						<AnimatePresence initial={false}>
 							{docs.map((d) => (
-								<DocRow key={d.name} pocId={pocId} doc={d} today={today} onRemove={() => setRemoving(d)} />
+								<DocRow
+									key={d.name}
+									pocId={pocId}
+									doc={d}
+									date={byAdded ? d.added_at : d.modified_at}
+									today={today}
+									onRemove={() => setRemoving(d)}
+								/>
 							))}
 						</AnimatePresence>
 					</div>
@@ -179,13 +208,13 @@ export function RfpDocuments({ pocId, today }: { pocId: number; today: string })
 							className="flex w-full items-center gap-2.5 rounded-xl border border-dashed border-line-strong px-3.5 py-3 text-left text-[12.5px] text-fg-3 hover:text-fg-2"
 						>
 							<Paperclip className="size-4 shrink-0" />
-							Arrastra aquí los pliegos, anexos y la propuesta (PDF, Word, Excel…) o haz clic para elegirlos.
+							{copy.empty}
 						</button>
 					)
 				)}
 				{(uploading > 0 || over) && (
 					<div className="px-2.5 py-1.5 text-[12px] text-accent-text">
-						{uploading > 0 ? `Guardando ${plural(uploading, 'documento', 'documentos')}…` : 'Suelta para añadirlos a la RFP'}
+						{uploading > 0 ? `Guardando ${plural(uploading, 'documento', 'documentos')}…` : copy.drop}
 					</div>
 				)}
 			</div>
@@ -196,7 +225,7 @@ export function RfpDocuments({ pocId, today }: { pocId: number; today: string })
 				description={
 					isElectron
 						? 'Se mueve a la Papelera de macOS: si lo necesitas, lo recuperas desde allí.'
-						: 'Se borra de la carpeta de la RFP.'
+						: `Se borra de la carpeta de ${copy.folder}.`
 				}
 				confirm="Quitar"
 				onConfirm={async () => {

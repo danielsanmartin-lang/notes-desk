@@ -334,11 +334,13 @@ export interface RfpDeadline {
 	days: number;
 }
 
-/** Un archivo de la documentación de una RFP. */
-export interface RfpDocument {
+/** Un archivo adjunto a una PoC o RFP. */
+export interface PocDocument {
 	name: string;
 	size: number;
 	modified_at: string;
+	/** Cuándo se adjuntó (fecha de creación del archivo en su carpeta). */
+	added_at: string;
 }
 
 export interface Suggestions {

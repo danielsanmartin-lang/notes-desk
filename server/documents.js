@@ -1,5 +1,6 @@
-// Documentación de las RFPs (pliegos, propuestas…): una carpeta por RFP junto a la base de datos. La carpeta
-// manda: no hay tabla, así que lo que se suelte en ella desde Finder también aparece en la app.
+// Documentos de las PoCs y las RFPs (pliegos, propuestas, capturas…): una carpeta por ficha junto a la base de
+// datos (poc-12, rfp-7). La carpeta manda: no hay tabla, así que lo que se suelte en ella desde Finder también
+// aparece en la app.
 
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -24,18 +25,22 @@ export function safeFileName(name) {
 
 /**
  * @param {string} rootDir carpeta raíz de los documentos (…/Notes Desk/documentos)
- * @param {{ trash?: (file: string) => Promise<void> }} [opts] cómo quitar un archivo (en la app, a la Papelera)
+ * @param {{ trash?: (file: string) => Promise<void>, kindOf?: (pocId: number) => 'poc' | 'rfp' }} [opts]
+ *   trash: cómo quitar un archivo (en la app, a la Papelera) · kindOf: si la ficha es PoC o RFP (da nombre a su carpeta)
  */
-export function createDocuments(rootDir, { trash } = {}) {
+export function createDocuments(rootDir, { trash, kindOf = () => 'rfp' } = {}) {
 	const remove = trash ?? ((file) => fs.promises.rm(file, { recursive: true, force: true }));
 
-	const folder = (pocId) => {
+	/** Carpeta de la ficha. `kind` se pasa cuando la ficha ya no está en la base (al borrarla). */
+	const folder = (pocId, kind) => {
 		const n = Number(pocId);
-		if (!Number.isInteger(n) || n <= 0) throw Object.assign(new Error('RFP no válida'), { status: 400 });
-		return path.join(rootDir, `rfp-${n}`);
+		if (!Number.isInteger(n) || n <= 0 || String(pocId) !== String(n)) throw Object.assign(new Error('Ficha no válida'), { status: 400 });
+		const k = kind ?? kindOf(n);
+		if (k !== 'poc' && k !== 'rfp') throw Object.assign(new Error('Ficha no válida'), { status: 400 });
+		return path.join(rootDir, `${k}-${n}`);
 	};
 
-	/** Ruta de un documento existente de la RFP, o error si el nombre se sale de su carpeta o no existe. */
+	/** Ruta de un documento existente de la ficha, o error si el nombre se sale de su carpeta o no existe. */
 	function pathOf(pocId, name) {
 		const dir = folder(pocId);
 		const clean = safeFileName(name);
@@ -46,6 +51,14 @@ export function createDocuments(rootDir, { trash } = {}) {
 		return file;
 	}
 
+	/** added_at: cuándo llegó a la carpeta (fecha de creación del archivo; si el sistema no la da, la de modificación). */
+	const describe = (name, st) => ({
+		name: name.normalize('NFC'),
+		size: st.size,
+		modified_at: st.mtime.toISOString(),
+		added_at: (st.birthtimeMs > 0 ? st.birthtime : st.mtime).toISOString(),
+	});
+
 	function list(pocId) {
 		const dir = folder(pocId);
 		if (!fs.existsSync(dir)) return [];
@@ -53,8 +66,7 @@ export function createDocuments(rootDir, { trash } = {}) {
 			.readdirSync(dir, { withFileTypes: true })
 			.filter((e) => e.isFile() && !e.name.startsWith('.'))
 			.map((e) => {
-				const st = fs.statSync(path.join(dir, e.name));
-				return { name: e.name.normalize('NFC'), size: st.size, modified_at: st.mtime.toISOString() };
+				return describe(e.name, fs.statSync(path.join(dir, e.name)));
 			})
 			.sort((a, b) => a.name.localeCompare(b.name, 'es', { numeric: true }));
 	}
@@ -70,7 +82,7 @@ export function createDocuments(rootDir, { trash } = {}) {
 		}
 	}
 
-	/** Guarda lo que llega por `stream` como un documento nuevo de la RFP. Escribe a un temporal y renombra. */
+	/** Guarda lo que llega por `stream` como un documento nuevo de la ficha. Escribe a un temporal y renombra. */
 	async function save(pocId, name, stream) {
 		const clean = safeFileName(name);
 		if (!clean) throw Object.assign(new Error('Nombre de documento no válido'), { status: 400 });
@@ -81,8 +93,7 @@ export function createDocuments(rootDir, { trash } = {}) {
 			await pipeline(stream, fs.createWriteStream(tmp, { flags: 'wx' }));
 			const final = freeName(dir, clean);
 			await fs.promises.rename(tmp, path.join(dir, final));
-			const st = fs.statSync(path.join(dir, final));
-			return { name: final, size: st.size, modified_at: st.mtime.toISOString() };
+			return describe(final, fs.statSync(path.join(dir, final)));
 		} catch (e) {
 			await fs.promises.rm(tmp, { force: true });
 			throw e;
@@ -93,9 +104,9 @@ export function createDocuments(rootDir, { trash } = {}) {
 		await remove(pathOf(pocId, name));
 	}
 
-	/** Al borrar la RFP, su carpeta entera. */
-	async function removeAll(pocId) {
-		const dir = folder(pocId);
+	/** Al borrar la ficha, su carpeta entera. */
+	async function removeAll(pocId, kind) {
+		const dir = folder(pocId, kind);
 		if (fs.existsSync(dir)) await remove(dir);
 	}
 

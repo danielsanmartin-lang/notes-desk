@@ -59,3 +59,20 @@ test('los nombres no pueden salirse de la carpeta de su RFP', async () => {
 	assert.throws(() => docs.folder('1/../2'), /no válida/);
 	await assert.rejects(docs.remove(1, '../../x'), /no válido/);
 });
+
+test('las PoCs tienen su propia carpeta y los documentos dicen cuándo se adjuntaron', async () => {
+	const kinds = { 1: 'poc', 2: 'rfp' };
+	const both = createDocuments(dir, { kindOf: (id) => kinds[id] });
+	assert.equal(path.basename(both.folder(1)), 'poc-1');
+	assert.equal(path.basename(both.folder(2)), 'rfp-2');
+	assert.equal(path.basename(both.folder(9, 'poc')), 'poc-9', 'al borrar la ficha se pasa el tipo');
+	assert.throws(() => both.folder(3), /no válida/, 'una ficha que no existe no tiene carpeta');
+
+	const first = await both.save(1, 'Captura.png', body('png'));
+	assert.ok(!Number.isNaN(Date.parse(first.added_at)));
+	await both.save(1, 'Acta kickoff.pdf', body('pdf'));
+	assert.deepEqual(both.list(1).map((d) => d.name), ['Acta kickoff.pdf', 'Captura.png']);
+	assert.deepEqual(both.list(2), [], 'la RFP no ve los de la PoC');
+	await both.removeAll(1, 'poc');
+	assert.equal(fs.existsSync(both.folder(1)), false);
+});

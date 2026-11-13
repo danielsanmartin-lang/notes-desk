@@ -34,10 +34,10 @@ export function startServer({ repo, documents = null, port = 0, token = null, st
 		return n;
 	};
 
-	// Documentación: solo las RFPs la tienen (ver server/documents.js).
-	const rfpId = (req) => {
+	// Documentos de una PoC o RFP (ver server/documents.js). pocKind da 404 si la ficha no existe.
+	const docsId = (req) => {
 		const pocId = id(req);
-		if (repo.pocKind(pocId) !== 'rfp') throw new HttpError(400, 'Solo las RFPs tienen documentación');
+		repo.pocKind(pocId);
 		if (!documents) throw new HttpError(501, 'Sin carpeta de documentos');
 		return pocId;
 	};
@@ -95,15 +95,19 @@ export function startServer({ repo, documents = null, port = 0, token = null, st
 	r.patch('/pocs/:id', (req, res) => res.json(repo.updatePoc(id(req), req.body)));
 	r.delete('/pocs/:id', async (req, res) => {
 		const pocId = id(req);
-		const isRfp = repo.pocKind(pocId) === 'rfp';
+		const kind = repo.pocKind(pocId);
 		repo.deletePoc(pocId);
-		if (isRfp && documents) await documents.removeAll(pocId).catch((e) => console.error('Documentos de la RFP', e));
+		if (documents) await documents.removeAll(pocId, kind).catch((e) => console.error('Documentos de la ficha', e));
 		res.json({ ok: true });
 	});
-	r.get('/pocs/:id/documents', (req, res) => res.json(documents && repo.pocKind(id(req)) === 'rfp' ? documents.list(id(req)) : []));
+	r.get('/pocs/:id/documents', (req, res) => {
+		const pocId = id(req);
+		repo.pocKind(pocId);
+		res.json(documents ? documents.list(pocId) : []);
+	});
 	// El cuerpo es el archivo tal cual (no JSON): se guarda en streaming, sin cargarlo en memoria.
 	r.post('/pocs/:id/documents', async (req, res) => {
-		const pocId = rfpId(req);
+		const pocId = docsId(req);
 		let name;
 		try {
 			name = decodeURIComponent(req.get('X-Filename') ?? '');
@@ -112,9 +116,9 @@ export function startServer({ repo, documents = null, port = 0, token = null, st
 		}
 		res.status(201).json(await documents.save(pocId, name, req));
 	});
-	r.get('/pocs/:id/documents/:name', (req, res) => res.sendFile(documents.pathOf(rfpId(req), req.params.name)));
+	r.get('/pocs/:id/documents/:name', (req, res) => res.sendFile(documents.pathOf(docsId(req), req.params.name)));
 	r.delete('/pocs/:id/documents/:name', async (req, res) => {
-		await documents.remove(rfpId(req), req.params.name);
+		await documents.remove(docsId(req), req.params.name);
 		res.json({ ok: true });
 	});
 	r.post('/pocs/:id/status', (req, res) => res.json(repo.setPocStatus(id(req), req.body ?? {})));

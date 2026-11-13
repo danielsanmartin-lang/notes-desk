@@ -156,7 +156,7 @@ ipcMain.on('zd:open-external', (_e, url) => openExternal(String(url)));
 ipcMain.on('zd:show-in-folder', (_e, file) => {
 	if (file === ctx.dbPath) shell.showItemInFolder(file);
 });
-// Documentos de una RFP: la ruta la resuelve documents (nunca sale de la carpeta de esa RFP).
+// Documentos de una PoC o RFP: la ruta la resuelve documents (nunca sale de la carpeta de esa ficha).
 const onDocument = (fn) => (_e, pocId, name) => {
 	try {
 		fn(ctx.documents.pathOf(pocId, name));
@@ -194,8 +194,11 @@ app.whenReady().then(async () => {
 	repo.housekeeping();
 	const backupsDir = path.join(path.dirname(dbPath), 'backups');
 	const token = DEV ? null : crypto.randomBytes(24).toString('hex');
-	// Documentación de las RFPs, junto a la base. Quitar un documento lo manda a la Papelera de macOS.
-	const documents = createDocuments(path.join(path.dirname(dbPath), 'documentos'), { trash: (file) => shell.trashItem(file) });
+	// Documentos de las PoCs y RFPs, junto a la base. Quitar un documento lo manda a la Papelera de macOS.
+	const documents = createDocuments(path.join(path.dirname(dbPath), 'documentos'), {
+		trash: (file) => shell.trashItem(file),
+		kindOf: (id) => repo.pocKind(id),
+	});
 	const server = await startServer({
 		repo,
 		documents,

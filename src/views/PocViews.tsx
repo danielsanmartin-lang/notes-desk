@@ -43,7 +43,7 @@ import { Composer } from '../components/Composer';
 import { CountryPicker } from '../components/CountryPicker';
 import { PocFilters, type PocViewMode } from '../components/PocFilters';
 import { Avatar, DeadlineChip, FinishedDatePicker, OpenDays, PocFacts, PocPeople, RfpFacts } from '../components/PocDetails';
-import { RfpDocuments } from '../components/RfpDocuments';
+import { Documents } from '../components/Documents';
 import { DoneSection, Group, TaskList } from '../components/TaskList';
 import { Timeline } from '../components/Timeline';
 import {
@@ -1253,7 +1253,7 @@ export function PocView({ id }: { id: number }) {
 
 				{rfp ? <RfpFacts poc={poc} today={today} /> : <PocFacts poc={poc} today={today} />}
 				<HubspotCard poc={poc} today={today} />
-				{rfp && <RfpDocuments pocId={poc.id} today={today} />}
+				<Documents pocId={poc.id} kind={rfp ? 'rfp' : 'poc'} today={today} />
 
 				<div className="mt-5 mb-2 flex items-center gap-3">
 					<div className="flex-1">
@@ -1317,7 +1317,7 @@ export function PocView({ id }: { id: number }) {
 				description={
 					rfp
 						? 'Se borran la RFP, todas sus tareas y su historial, y su documentación va a la Papelera de macOS. Si solo ha terminado, márcala como adjudicada, perdida o descartada.'
-						: 'Se borran la PoC, todas sus tareas y su historial. No se puede deshacer. Si solo ha terminado, márcala como ganada o perdida.'
+						: 'Se borran la PoC, todas sus tareas y su historial, y sus documentos van a la Papelera de macOS. Si solo ha terminado, márcala como ganada o perdida.'
 				}
 				confirm={`Borrar ${noun}`}
 				onConfirm={async () => {
