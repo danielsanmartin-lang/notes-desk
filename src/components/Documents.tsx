@@ -1,6 +1,7 @@
 // Documentos de una PoC (actas, capturas, presupuestos…) o de una RFP (pliegos, anexos, la propuesta…): se añaden
-// arrastrando archivos o con el botón, y se abren con su app. Viven en una carpeta por ficha junto a la base de
-// datos (ver server/documents.js).
+// arrastrando archivos o con el botón, y se abren con su app. También enlaces (Google Docs, Sheets…), con el botón
+// «Enlace» o arrastrándolos desde el navegador. Todo vive en una carpeta por ficha junto a la base de datos (ver
+// server/documents.js); los enlaces, como archivos .webloc.
 
 import {
 	ExternalLink,
@@ -10,6 +11,7 @@ import {
 	FileSpreadsheet,
 	FileText,
 	FolderOpen,
+	Link2,
 	Paperclip,
 	Presentation,
 	Search,
@@ -17,15 +19,16 @@ import {
 	X,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { useRef, useState, type DragEvent, type ReactNode } from 'react';
+import { useRef, useState, type DragEvent, type FormEvent, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { formatDay } from '../../shared/dates.js';
+import { cleanUrl, linkTitle } from '../../shared/links.js';
 import { apiUrl } from '../api/client';
 import { useActions, useDocuments } from '../api/hooks';
 import type { PocDocument } from '../api/types';
 import { isElectron, zd } from '../lib/bridge';
 import { cx, plural } from '../lib/format';
-import { Button, Confirm, IconButton, SectionTitle } from './ui';
+import { Button, Confirm, IconButton, SectionTitle, inputClass } from './ui';
 
 const ICONS: [RegExp, ReactNode, string][] = [
 	[/\.(pdf)$/i, <FileText />, 'text-danger'],
@@ -36,9 +39,19 @@ const ICONS: [RegExp, ReactNode, string][] = [
 	[/\.(png|jpe?g|gif|webp|heic|svg)$/i, <FileImage />, 'text-teal'],
 ];
 
-function DocIcon({ name }: { name: string }) {
-	const hit = ICONS.find(([re]) => re.test(name));
-	return <span className={cx('flex size-4 shrink-0 items-center justify-center [&>svg]:size-4', hit?.[2] ?? 'text-fg-3')}>{hit?.[1] ?? <File />}</span>;
+// Los enlaces de Google llevan el icono de su tipo; el resto, el de enlace.
+const LINK_ICONS: Record<string, [ReactNode, string]> = {
+	'Google Doc': [<FileText />, 'text-accent-text'],
+	'Google Sheet': [<FileSpreadsheet />, 'text-ok'],
+	'Google Slides': [<Presentation />, 'text-warn'],
+};
+
+function DocIcon({ doc }: { doc: PocDocument }) {
+	const file = ICONS.find(([re]) => re.test(doc.name));
+	const hit: [ReactNode, string] | undefined = doc.url
+		? (LINK_ICONS[linkTitle(doc.url)] ?? [<Link2 />, 'text-accent-text'])
+		: file && [file[1], file[2]];
+	return <span className={cx('flex size-4 shrink-0 items-center justify-center [&>svg]:size-4', hit?.[1] ?? 'text-fg-3')}>{hit?.[0] ?? <File />}</span>;
 }
 
 export function formatBytes(n: number) {
@@ -47,11 +60,18 @@ export function formatBytes(n: number) {
 	return `${(n / (1024 * 1024)).toLocaleString('es-ES', { maximumFractionDigits: n < 10 * 1024 * 1024 ? 1 : 0 })} MB`;
 }
 
+/** Cómo se llama en la lista: los enlaces, sin su .webloc. */
+const shownName = (doc: PocDocument) => (doc.url ? doc.name.replace(/\.(webloc|url)$/i, '') : doc.name);
+const hostOf = (url: string) => new URL(url).hostname.replace(/^www\./, '');
+
 const docPath = (pocId: number, name: string) => `/pocs/${pocId}/documents/${encodeURIComponent(name)}`;
 
-function openDoc(pocId: number, name: string) {
-	if (zd) zd.openDocument(pocId, name);
-	else window.open(apiUrl(docPath(pocId, name)), '_blank', 'noopener');
+function openDoc(pocId: number, doc: PocDocument) {
+	if (doc.url) {
+		if (zd) zd.openExternal(doc.url);
+		else window.open(doc.url, '_blank', 'noopener');
+	} else if (zd) zd.openDocument(pocId, doc.name);
+	else window.open(apiUrl(docPath(pocId, doc.name)), '_blank', 'noopener');
 }
 
 function DocRow({ pocId, doc, date, today, onRemove }: { pocId: number; doc: PocDocument; date: string; today: string; onRemove: () => void }) {
@@ -61,16 +81,16 @@ function DocRow({ pocId, doc, date, today, onRemove }: { pocId: number; doc: Poc
 			initial={{ opacity: 0, y: -4 }}
 			animate={{ opacity: 1, y: 0 }}
 			exit={{ opacity: 0, height: 0 }}
-			onDoubleClick={() => openDoc(pocId, doc.name)}
+			onDoubleClick={() => openDoc(pocId, doc)}
 			className="group flex cursor-default items-center gap-2.5 rounded-xl px-2.5 py-1.5 hover:bg-hover"
-			title="Doble clic para abrirlo"
+			title={doc.url ? `${doc.url}\nDoble clic para abrirlo en el navegador` : 'Doble clic para abrirlo'}
 		>
-			<DocIcon name={doc.name} />
-			<span className="min-w-0 flex-1 truncate text-[13px]">{doc.name}</span>
-			<span className="shrink-0 text-[11.5px] text-fg-3 tabular-nums">{formatBytes(doc.size)}</span>
+			<DocIcon doc={doc} />
+			<span className="min-w-0 flex-1 truncate text-[13px]">{shownName(doc)}</span>
+			<span className="max-w-[40%] shrink-0 truncate text-[11.5px] text-fg-3 tabular-nums">{doc.url ? hostOf(doc.url) : formatBytes(doc.size)}</span>
 			<span className="w-16 shrink-0 text-right text-[11.5px] text-fg-3">{formatDay(date.slice(0, 10), today)}</span>
 			<div className="flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100">
-				<IconButton label="Abrir" onClick={() => openDoc(pocId, doc.name)}>
+				<IconButton label={doc.url ? 'Abrir en el navegador' : 'Abrir'} onClick={() => openDoc(pocId, doc)}>
 					<ExternalLink className="size-3.5" />
 				</IconButton>
 				{zd && (
@@ -86,20 +106,82 @@ function DocRow({ pocId, doc, date, today, onRemove }: { pocId: number; doc: Poc
 	);
 }
 
+/** Formulario en línea para pegar un enlace y, si se quiere, ponerle nombre. */
+function LinkForm({ onAdd, onClose }: { onAdd: (url: string, title: string) => Promise<boolean>; onClose: () => void }) {
+	const [url, setUrl] = useState('');
+	const [title, setTitle] = useState('');
+	const [saving, setSaving] = useState(false);
+	const clean = cleanUrl(url);
+	const submit = async (e: FormEvent) => {
+		e.preventDefault();
+		if (!clean || saving) return;
+		setSaving(true);
+		const ok = await onAdd(clean, title.trim());
+		setSaving(false);
+		if (ok) onClose();
+	};
+	return (
+		<motion.form
+			initial={{ opacity: 0, height: 0 }}
+			animate={{ opacity: 1, height: 'auto' }}
+			exit={{ opacity: 0, height: 0 }}
+			onSubmit={submit}
+			onKeyDown={(e) => e.key === 'Escape' && onClose()}
+			className="overflow-hidden"
+		>
+			<div className="mb-2 flex flex-wrap items-center gap-2 rounded-xl bg-hover p-2">
+				<input
+					autoFocus
+					value={url}
+					onChange={(e) => setUrl(e.target.value)}
+					placeholder="Pega el enlace: https://docs.google.com/…"
+					aria-label="Enlace"
+					className={cx(inputClass, 'min-w-[220px] flex-[2]')}
+				/>
+				<input
+					value={title}
+					onChange={(e) => setTitle(e.target.value)}
+					placeholder={clean ? `Nombre (si no, «${linkTitle(clean)}»)` : 'Nombre (opcional)'}
+					aria-label="Nombre del enlace"
+					className={cx(inputClass, 'min-w-[160px] flex-1')}
+				/>
+				<div className="flex items-center gap-1">
+					<Button size="sm" variant="primary" type="submit" disabled={!clean || saving}>
+						Añadir
+					</Button>
+					<Button size="sm" variant="ghost" type="button" onClick={onClose}>
+						Cancelar
+					</Button>
+				</div>
+				{url.trim() && !clean && <div className="w-full px-1 text-[11.5px] text-danger">Eso no parece una dirección web (https://…).</div>}
+			</div>
+		</motion.form>
+	);
+}
+
 const COPY = {
 	poc: {
 		title: 'Documentos de la PoC',
-		empty: 'Arrastra aquí PDFs, imágenes, presentaciones o cualquier archivo de la PoC, o haz clic para elegirlos.',
+		empty: 'Arrastra aquí PDFs, imágenes, presentaciones o cualquier archivo de la PoC, o haz clic para elegirlos. Para un Google Doc o Sheet, usa «Enlace».',
 		drop: 'Suelta para adjuntarlos a la PoC',
 		folder: 'la PoC',
 	},
 	rfp: {
 		title: 'Documentación',
-		empty: 'Arrastra aquí los pliegos, anexos y la propuesta (PDF, Word, Excel…) o haz clic para elegirlos.',
+		empty: 'Arrastra aquí los pliegos, anexos y la propuesta (PDF, Word, Excel…) o haz clic para elegirlos. Para un Google Doc o Sheet, usa «Enlace».',
 		drop: 'Suelta para añadirlos a la RFP',
 		folder: 'la RFP',
 	},
 };
+
+/** Enlace que llega arrastrado desde el navegador (la barra de direcciones o un link de la página). */
+const droppedUrl = (e: DragEvent) =>
+	cleanUrl(
+		e.dataTransfer
+			.getData('text/uri-list')
+			.split(/\r?\n/)
+			.find((l) => l && !l.startsWith('#')) ?? '',
+	);
 
 /**
  * Bloque de documentos de la ficha de una PoC o RFP: lista, zona para soltar archivos y botones. Las PoCs los
@@ -114,6 +196,7 @@ export function Documents({ pocId, kind, today }: { pocId: number; kind: 'poc' |
 	const input = useRef<HTMLInputElement>(null);
 	const [over, setOver] = useState(false);
 	const [uploading, setUploading] = useState(0);
+	const [linking, setLinking] = useState(false);
 	const [removing, setRemoving] = useState<PocDocument | null>(null);
 
 	const add = async (files: File[]) => {
@@ -133,15 +216,29 @@ export function Documents({ pocId, kind, today }: { pocId: number; kind: 'poc' |
 		}
 	};
 
-	const hasFiles = (e: DragEvent) => Array.from(e.dataTransfer.types).includes('Files');
+	const addLink = async (url: string, title = '') => {
+		try {
+			const saved = await a.addLink(pocId, url, title);
+			toast.success(`Añadido el enlace ${shownName(saved)}`);
+			return true;
+		} catch {
+			return false;
+		}
+	};
+
+	// Se aceptan archivos (desde Finder) y enlaces (desde el navegador).
+	const accepts = (e: DragEvent) => {
+		const types = Array.from(e.dataTransfer.types);
+		return types.includes('Files') || types.includes('text/uri-list');
+	};
 	const dropProps = {
 		onDragEnter: (e: DragEvent) => {
-			if (!hasFiles(e)) return;
+			if (!accepts(e)) return;
 			e.preventDefault();
 			setOver(true);
 		},
 		onDragOver: (e: DragEvent) => {
-			if (!hasFiles(e)) return;
+			if (!accepts(e)) return;
 			e.preventDefault();
 			e.dataTransfer.dropEffect = 'copy';
 		},
@@ -149,10 +246,14 @@ export function Documents({ pocId, kind, today }: { pocId: number; kind: 'poc' |
 			if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(false);
 		},
 		onDrop: (e: DragEvent) => {
-			if (!hasFiles(e)) return;
+			if (!accepts(e)) return;
 			e.preventDefault();
 			setOver(false);
-			add(Array.from(e.dataTransfer.files));
+			const files = Array.from(e.dataTransfer.files);
+			if (files.length) return add(files);
+			const url = droppedUrl(e);
+			if (url) addLink(url);
+			else toast.error('Eso no parece una dirección web');
 		},
 	};
 
@@ -166,13 +267,17 @@ export function Documents({ pocId, kind, today }: { pocId: number; kind: 'poc' |
 								Abrir carpeta
 							</Button>
 						)}
+						<Button size="xs" icon={<Link2 className="size-3" />} onClick={() => setLinking((v) => !v)}>
+							Enlace
+						</Button>
 						<Button size="xs" icon={<Upload className="size-3" />} onClick={() => input.current?.click()} disabled={uploading > 0}>
 							Añadir
 						</Button>
 					</div>
 				}
 			>
-				{copy.title}{docs.length > 0 && <span className="ml-1.5 font-normal text-fg-3">{docs.length}</span>}
+				{copy.title}
+				{docs.length > 0 && <span className="ml-1.5 font-normal text-fg-3">{docs.length}</span>}
 			</SectionTitle>
 			<input
 				ref={input}
@@ -184,6 +289,7 @@ export function Documents({ pocId, kind, today }: { pocId: number; kind: 'poc' |
 					e.target.value = '';
 				}}
 			/>
+			<AnimatePresence initial={false}>{linking && <LinkForm onAdd={addLink} onClose={() => setLinking(false)} />}</AnimatePresence>
 			<div className={cx('rounded-xl transition-colors', over && 'bg-accent-soft ring-2 ring-accent/60')}>
 				{docs.length > 0 ? (
 					<div className="flex flex-col py-0.5">
@@ -201,7 +307,8 @@ export function Documents({ pocId, kind, today }: { pocId: number; kind: 'poc' |
 						</AnimatePresence>
 					</div>
 				) : (
-					!isLoading && (
+					!isLoading &&
+					!linking && (
 						<button
 							type="button"
 							onClick={() => input.current?.click()}
@@ -221,11 +328,13 @@ export function Documents({ pocId, kind, today }: { pocId: number; kind: 'poc' |
 			<Confirm
 				open={!!removing}
 				onOpenChange={(open) => !open && setRemoving(null)}
-				title={`¿Quitar ${removing?.name ?? ''}?`}
+				title={`¿Quitar ${removing ? shownName(removing) : ''}?`}
 				description={
-					isElectron
-						? 'Se mueve a la Papelera de macOS: si lo necesitas, lo recuperas desde allí.'
-						: `Se borra de la carpeta de ${copy.folder}.`
+					removing?.url
+						? 'Solo se quita el enlace de la ficha: el documento sigue donde estaba.'
+						: isElectron
+							? 'Se mueve a la Papelera de macOS: si lo necesitas, lo recuperas desde allí.'
+							: `Se borra de la carpeta de ${copy.folder}.`
 				}
 				confirm="Quitar"
 				onConfirm={async () => {

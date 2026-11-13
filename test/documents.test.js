@@ -76,3 +76,35 @@ test('las PoCs tienen su propia carpeta y los documentos dicen cuándo se adjunt
 	await both.removeAll(1, 'poc');
 	assert.equal(fs.existsSync(both.folder(1)), false);
 });
+
+test('enlaces: se guardan como .webloc, salen con su URL y en su orden', async () => {
+	const sheet = 'https://docs.google.com/spreadsheets/d/abc123/edit#gid=0';
+	const a = await docs.addLink(3, sheet, '');
+	assert.equal(a.name, 'Google Sheet.webloc');
+	assert.equal(a.url, sheet);
+	const b = await docs.addLink(3, 'docs.google.com/document/d/x/edit', 'Plan de la PoC');
+	assert.equal(b.name, 'Plan de la PoC.webloc');
+	assert.equal(b.url, 'https://docs.google.com/document/d/x/edit', 'sin esquema se entiende https');
+	const c = await docs.addLink(3, 'https://www.notion.so/zepo?a=1&b=<2>', null);
+	assert.equal(c.name, 'notion.so.webloc');
+	assert.equal(c.url, 'https://www.notion.so/zepo?a=1&b=%3C2%3E');
+	assert.equal((await docs.addLink(3, sheet)).name, 'Google Sheet (2).webloc', 'no pisa uno que ya existe');
+	assert.equal(docs.list(3).find((d) => d.name === 'Plan de la PoC.webloc').url, 'https://docs.google.com/document/d/x/edit');
+
+	for (const bad of ['', 'javascript:alert(1)', 'file:///etc/passwd', 'hola', 'mailto:a@b.com']) {
+		await assert.rejects(docs.addLink(3, bad), /no parece válido/, bad);
+	}
+});
+
+test('enlaces que llegan desde Finder: .webloc binario y .url de Windows', () => {
+	const dir5 = docs.folder(5);
+	fs.mkdirSync(dir5, { recursive: true });
+	const url = 'https://docs.google.com/presentation/d/zz/edit';
+	// bplist00 con un dict { URL: <cadena ASCII de 46 bytes> }: marcador 0x5F + entero 0x10 + longitud.
+	const bin = Buffer.concat([Buffer.from('bplist00\xd1\x01\x02SURL', 'latin1'), Buffer.from([0x5f, 0x10, url.length]), Buffer.from(url), Buffer.alloc(40)]);
+	fs.writeFileSync(path.join(dir5, 'Deck.webloc'), bin);
+	fs.writeFileSync(path.join(dir5, 'Web.url'), '[InternetShortcut]\r\nURL=https://zepo.app/\r\n');
+	fs.writeFileSync(path.join(dir5, 'Roto.webloc'), 'nada');
+	const byName = Object.fromEntries(docs.list(5).map((d) => [d.name, d.url]));
+	assert.deepEqual(byName, { 'Deck.webloc': url, 'Roto.webloc': undefined, 'Web.url': 'https://zepo.app/' });
+});

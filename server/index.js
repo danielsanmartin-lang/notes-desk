@@ -116,6 +116,9 @@ export function startServer({ repo, documents = null, port = 0, token = null, st
 		}
 		res.status(201).json(await documents.save(pocId, name, req));
 	});
+	r.post('/pocs/:id/links', async (req, res) => {
+		res.status(201).json(await documents.addLink(docsId(req), req.body?.url, req.body?.title));
+	});
 	r.get('/pocs/:id/documents/:name', (req, res) => res.sendFile(documents.pathOf(docsId(req), req.params.name)));
 	r.delete('/pocs/:id/documents/:name', async (req, res) => {
 		await documents.remove(docsId(req), req.params.name);

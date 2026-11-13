@@ -159,6 +159,8 @@ export function useActions() {
 						return out;
 					})(),
 				),
+			/** Adjunta un enlace (Google Doc, Sheet…) a una PoC o RFP. Sin título, el servidor pone uno. */
+			addLink: (pocId: number, url: string, title?: string) => post<PocDocument>(`/pocs/${pocId}/links`, { url, title }),
 			deleteDocument: (pocId: number, name: string) =>
 				run(api(`/pocs/${pocId}/documents/${encodeURIComponent(name)}`, { method: 'DELETE' })),
 			setAccountHubspot: (name: string, hubspot: string | null) =>

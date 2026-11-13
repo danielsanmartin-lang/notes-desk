@@ -341,6 +341,8 @@ export interface PocDocument {
 	modified_at: string;
 	/** Cuándo se adjuntó (fecha de creación del archivo en su carpeta). */
 	added_at: string;
+	/** Si es un enlace (un .webloc o .url de la carpeta): adónde lleva. */
+	url?: string;
 }
 
 export interface Suggestions {
