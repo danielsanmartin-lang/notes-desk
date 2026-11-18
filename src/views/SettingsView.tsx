@@ -4,7 +4,8 @@ import type { CSSProperties, ReactNode } from 'react';
 import { THEMES } from '../../shared/themes.js';
 import { useActions, useHubspotStatus, useMeta, useSettings } from '../api/hooks';
 import { Chip } from '../components/bits';
-import { AutoTextarea, Button, inputClass, useDraft } from '../components/ui';
+import { TaskTemplateEditor } from '../components/TaskTemplateEditor';
+import { Button, inputClass } from '../components/ui';
 import { isElectron, zd } from '../lib/bridge';
 import { cx } from '../lib/format';
 import { useMode, type Mode } from '../lib/theme';
@@ -120,8 +121,6 @@ export function SettingsView() {
 	const { data: hs } = useHubspotStatus();
 	const a = useActions();
 	const qc = useQueryClient();
-	const template = useDraft(s?.poc_template, (v) => a.saveSettings({ poc_template: v }));
-	const rfpTemplate = useDraft(s?.rfp_template, (v) => a.saveSettings({ rfp_template: v }));
 	useListIds([]);
 	if (!s) return null;
 
@@ -195,12 +194,12 @@ export function SettingsView() {
 					</label>
 				</Card>
 
-				<Card icon={<FlaskConical />} title="Tareas de PoC" description="Una por línea. Salen como sugerencias en cada PoC: haces clic en una y pasa a ser una tarea de esa PoC.">
-					<AutoTextarea {...template} className="min-h-[90px] rounded-xl bg-hover px-3 py-2.5 text-[13px] leading-6" />
+				<Card icon={<FlaskConical />} title="Tareas de PoC" description="Salen como sugerencias en cada PoC: haces clic en una y pasa a ser una tarea de esa PoC.">
+					<TaskTemplateEditor value={s.poc_template} onSave={(v) => a.saveSettings({ poc_template: v })} />
 				</Card>
 
-				<Card icon={<ScrollText />} title="Tareas de RFP" description="Lo mismo para las RFPs: una por línea, y salen como sugerencias en cada RFP.">
-					<AutoTextarea {...rfpTemplate} className="min-h-[90px] rounded-xl bg-hover px-3 py-2.5 text-[13px] leading-6" />
+				<Card icon={<ScrollText />} title="Tareas de RFP" description="Lo mismo para las RFPs: salen como sugerencias en cada RFP.">
+					<TaskTemplateEditor value={s.rfp_template} onSave={(v) => a.saveSettings({ rfp_template: v })} />
 				</Card>
 
 				<Card icon={<Link2 />} title="HubSpot" description="Solo lectura: la app nunca escribe en HubSpot.">
