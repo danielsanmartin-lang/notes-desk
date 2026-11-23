@@ -764,7 +764,12 @@ test('RFPs: se crean con su plantilla, su ficha propia y no se mezclan con las P
 	);
 	assert.equal(repo.stats(4).pocs.active, 1, 'las estadísticas de PoCs no cuentan RFPs');
 	at('2026-11-10T10:00:00');
-	assert.deepEqual(repo.stalePocs().map((p) => p.name), ['Cafam'], 'las RFPs no salen como PoCs sin movimiento');
+	assert.deepEqual(repo.stalePocs().map((p) => [p.name, p.kind]), [['Cafam', 'poc'], ['Licitación SOC Metro', 'rfp']]);
+	repo.setSettings({ rfp_stale_days: 0 });
+	assert.deepEqual(repo.stalePocs().map((p) => p.name), ['Cafam'], 'con 0 días las RFPs no avisan');
+	repo.setSettings({ rfp_stale_days: 7, poc_stale_days: 30 });
+	assert.deepEqual(repo.stalePocs().map((p) => p.name), ['Licitación SOC Metro'], 'cada tipo con su umbral');
+	assert.throws(() => repo.setSettings({ poc_stale_days: 91 }), /inactividad/);
 });
 
 test('RFPs: preparación → presentada → adjudicada, descartada y vuelta atrás, con su historial', () => {

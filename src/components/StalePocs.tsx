@@ -1,13 +1,14 @@
-// Inicio: PoCs activas que llevan una semana o más sin nada nuevo (ni tarea, follow-up, toque, respuesta ni
-// nota, en la PoC o en su cuenta). Desaparecen solas en cuanto apuntas algo, o se silencian una semana.
+// Inicio: PoCs y RFPs activas que llevan los días de Ajustes o más sin nada nuevo (ni tarea, follow-up, toque,
+// respuesta ni nota, en ella o en su cuenta). Desaparecen solas en cuanto apuntas algo, o se silencian una semana.
 
 import { BellOff, ExternalLink, Snowflake, StickyNote } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { addDays, formatDay } from '../../shared/dates.js';
-import { useActions, useStalePocs } from '../api/hooks';
+import { useActions, useSettings, useStalePocs } from '../api/hooks';
 import type { StalePoc } from '../api/types';
-import { cx } from '../lib/format';
+import { cx, plural } from '../lib/format';
+import { kindLabel } from '../lib/pocs';
 import { useUI } from '../lib/store';
 import { Chip, PocDot } from './bits';
 import { Group } from './TaskList';
@@ -54,6 +55,7 @@ function StaleRow({ poc, today }: { poc: StalePoc; today: string }) {
 				<div className="min-w-0 flex-1">
 					<div className="truncate text-[13.5px] leading-5">
 						<span className="font-medium">{poc.name}</span>
+						{poc.kind === 'rfp' && <span className="text-fg-3"> · RFP</span>}
 						{showCompany && <span className="text-fg-3"> · {poc.company}</span>}
 					</div>
 					<div className="text-[11.5px] text-fg-3">
@@ -61,13 +63,13 @@ function StaleRow({ poc, today }: { poc: StalePoc; today: string }) {
 					</div>
 				</div>
 				<div className="flex shrink-0 items-center gap-0.5" onClick={stop}>
-					<button type="button" onClick={() => setNoting((v) => !v)} className={cx(actionClass, noting && 'bg-active text-fg')} title="Apuntar una nota en la PoC">
+					<button type="button" onClick={() => setNoting((v) => !v)} className={cx(actionClass, noting && 'bg-active text-fg')} title={`Apuntar una nota en la ${kindLabel(poc.kind)}`}>
 						<StickyNote className="size-3" /> Nota
 					</button>
-					<button type="button" onClick={() => go({ kind: 'poc', id: poc.id })} className={actionClass} title="Abrir la PoC">
+					<button type="button" onClick={() => go({ kind: 'poc', id: poc.id })} className={actionClass} title={`Abrir la ${kindLabel(poc.kind)}`}>
 						<ExternalLink className="size-3" /> Abrir
 					</button>
-					<button type="button" onClick={snooze} className={actionClass} title="No avisar de esta PoC hasta dentro de una semana">
+					<button type="button" onClick={snooze} className={actionClass} title={`No avisar de esta ${kindLabel(poc.kind)} hasta dentro de una semana`}>
 						<BellOff className="size-3" /> Silenciar
 					</button>
 					<span className="ml-1">
@@ -100,14 +102,19 @@ function StaleRow({ poc, today }: { poc: StalePoc; today: string }) {
 
 export function StalePocsGroup({ today }: { today: string }) {
 	const { data = [] } = useStalePocs();
+	const { data: s } = useSettings();
 	if (!data.length) return null;
+	const kinds = new Set(data.map((p) => p.kind));
+	const title = kinds.size > 1 ? 'PoCs y RFPs sin movimiento' : kinds.has('rfp') ? 'RFPs sin movimiento' : 'PoCs sin movimiento';
+	const limits = [...kinds].map((k) => (k === 'rfp' ? s?.rfp_stale_days : s?.poc_stale_days)).filter((n): n is number => !!n);
+	const min = limits.length ? Math.min(...limits) : null;
 	return (
 		<Group
-			title="PoCs sin movimiento"
+			title={title}
 			icon={<Snowflake />}
 			count={data.length}
 			tone="warn"
-			right={<span className="text-[11px] text-fg-3">Una semana o más sin nada nuevo</span>}
+			right={min != null && <span className="text-[11px] text-fg-3">{plural(min, 'día', 'días')} o más sin nada nuevo</span>}
 		>
 			{data.map((p) => (
 				<StaleRow key={p.id} poc={p} today={today} />

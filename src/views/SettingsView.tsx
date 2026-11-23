@@ -1,4 +1,4 @@
-import { Bell, Check, Database, FlaskConical, FolderOpen, Keyboard, Link2, Monitor, Moon, Palette, Power, ScrollText, Send, Settings, Sun } from 'lucide-react';
+import { Bell, Check, Database, FlaskConical, FolderOpen, Keyboard, Link2, Monitor, Moon, Palette, Power, ScrollText, Send, Settings, Snowflake, Sun } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { CSSProperties, ReactNode } from 'react';
 import { THEMES } from '../../shared/themes.js';
@@ -192,6 +192,36 @@ export function SettingsView() {
 						/>
 						Abrir Notes Desk al iniciar sesión
 					</label>
+				</Card>
+
+				<Card
+					icon={<Snowflake />}
+					title="PoCs y RFPs sin movimiento"
+					description="Inicio y el resumen diario avisan de las PoCs y RFPs en curso que llevan estos días sin nada nuevo (ni tarea, follow-up, toque, respuesta ni nota)."
+				>
+					<div className="space-y-2 text-[13px]">
+						{(
+							[
+								['poc_stale_days', 'PoCs'],
+								['rfp_stale_days', 'RFPs'],
+							] as const
+						).map(([key, label]) => (
+							<div key={key} className="flex items-center gap-2">
+								<span className="w-12">{label}</span>
+								<select value={s[key]} onChange={(e) => a.saveSettings({ [key]: Number(e.target.value) })} className={cx(inputClass, 'w-auto')}>
+									{[...new Set([3, 5, 7, 10, 14, 21, 30, s[key]])]
+										.filter((n) => n > 0)
+										.sort((x, y) => x - y)
+										.map((n) => (
+											<option key={n} value={n}>
+												Avisar tras {n} {n === 1 ? 'día' : 'días'}
+											</option>
+										))}
+									<option value={0}>No avisar</option>
+								</select>
+							</div>
+						))}
+					</div>
 				</Card>
 
 				<Card icon={<FlaskConical />} title="Tareas de PoC" description="Salen como sugerencias en cada PoC: haces clic en una y pasa a ser una tarea de esa PoC.">

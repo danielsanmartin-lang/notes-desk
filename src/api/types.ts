@@ -226,6 +226,9 @@ export type Appearance = 'system' | 'light' | 'dark';
 
 export interface Settings {
 	fup_days: number;
+	/** Días sin nada nuevo para avisar de una PoC / RFP en curso. 0 = no avisar. */
+	poc_stale_days: number;
+	rfp_stale_days: number;
 	digest_time: string;
 	shortcut: string;
 	open_at_login: boolean;
@@ -310,9 +313,10 @@ export interface Stats {
 	pocs: PocSummary;
 }
 
-/** PoC activa sin nada nuevo desde hace `days` días (en ella o en su cuenta). */
+/** PoC o RFP activa sin nada nuevo desde hace `days` días (en ella o en su cuenta). */
 export interface StalePoc {
 	id: number;
+	kind: PocKind;
 	name: string;
 	color: string | null;
 	company: string | null;

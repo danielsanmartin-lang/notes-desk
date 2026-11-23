@@ -38,6 +38,9 @@ export const POC_COLORS = ['#142CD1', '#1D9E75', '#D85A30', '#7F77DD', '#D4537E'
 
 export const DEFAULT_SETTINGS = {
 	fup_days: 3,
+	// Días sin nada nuevo a partir de los cuales una PoC / RFP en curso sale como «sin movimiento». 0 = no avisar.
+	poc_stale_days: 7,
+	rfp_stale_days: 7,
 	digest_time: '09:00',
 	shortcut: 'Alt+Space',
 	open_at_login: false,
@@ -118,8 +121,6 @@ function parseAmount(v) {
 const pick = (obj, keys) => Object.fromEntries(keys.map((k) => [k, obj[k]]));
 
 const itemOut = (row) => row && { ...row, flagged: !!row.flagged };
-/** Días sin nada nuevo a partir de los cuales una PoC activa sale como «sin movimiento». */
-export const STALE_DAYS = 7;
 /** Días de antelación con los que una fecha límite de RFP sale en Inicio. */
 export const RFP_DAYS = 7;
 
@@ -198,6 +199,10 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 			if (k === 'fup_days') {
 				const n = Number(v);
 				if (!Number.isInteger(n) || n < 1 || n > 60) throw bad('El intervalo de follow-up va de 1 a 60 días');
+				clean[k] = n;
+			} else if (k === 'poc_stale_days' || k === 'rfp_stale_days') {
+				const n = Number(v);
+				if (!Number.isInteger(n) || n < 0 || n > 90) throw bad('El aviso de inactividad va de 1 a 90 días (0 = no avisar)');
 				clean[k] = n;
 			} else if (k === 'digest_time') {
 				if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(String(v))) throw bad('Hora no válida');
@@ -1482,30 +1487,44 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 	// ── PoCs sin movimiento ────────────────────────────────────────────────────
 
 	/**
-	 * PoCs activas que llevan STALE_DAYS días o más sin nada nuevo: ni tarea o follow-up creado, ni toque,
-	 * respuesta, nota o completada, en la PoC o en su cuenta. Reprogramar no cuenta. Cuenta desde que se
-	 * creó (o desde su fecha de inicio, si es posterior); las silenciadas no salen hasta la fecha elegida.
+	 * PoCs y RFPs activas que llevan los días de Ajustes (poc_stale_days / rfp_stale_days) o más sin nada nuevo:
+	 * ni tarea o follow-up creado, ni toque, respuesta, nota o completada, en la PoC o en su cuenta. Reprogramar
+	 * no cuenta. Cuenta desde que se creó (o desde su fecha de inicio, si es posterior); las silenciadas no salen
+	 * hasta la fecha elegida. Con 0 días, ese tipo no avisa.
 	 */
 	function stalePocs() {
 		const t = today();
+		const s = getSettings();
+		const limit = { poc: s.poc_stale_days, rfp: s.rfp_stale_days };
+		const kinds = POC_KINDS.filter((k) => limit[k] > 0);
+		if (!kinds.length) return [];
 		const sameAccount = (expr) => `(p.company IS NOT NULL AND trim(fold(${expr})) = trim(fold(p.company)))`;
 		const rows = all(
-			`SELECT p.id, p.name, p.color, p.company, p.created_at, p.start_date, p.stale_snoozed_until,
+			`SELECT p.id, p.kind, p.name, p.color, p.company, p.created_at, p.start_date, p.stale_snoozed_until,
 			   (SELECT max(a.occurred_at) FROM activity a LEFT JOIN items i ON i.id = a.item_id
 			    WHERE a.kind IN ('created', 'touch', 'reply', 'note', 'done', 'resumed')
 			      AND (i.id IS NULL OR i.deleted_at IS NULL)
 			      AND (a.poc_id = p.id OR i.poc_id = p.id
 			           OR (i.id IS NOT NULL AND i.poc_id IS NULL AND ${sameAccount('i.company')})
 			           OR (a.item_id IS NULL AND a.poc_id IS NULL AND ${sameAccount('a.company')}))) AS last_change_at
-			 FROM pocs p WHERE p.status = 'active' AND p.kind = 'poc'`,
+			 FROM pocs p WHERE p.status = 'active' AND p.kind IN (${kinds.map((k) => `'${k}'`).join(', ')})`,
 		);
 		return rows
 			.filter((r) => !(r.start_date && r.start_date > t) && !(r.stale_snoozed_until && r.stale_snoozed_until > t))
 			.map((r) => {
 				const since = [r.last_change_at, r.created_at, r.start_date].filter(Boolean).map((x) => x.slice(0, 10)).sort().at(-1);
-				return { id: r.id, name: r.name, color: r.color, company: r.company, last_change_at: r.last_change_at, since, days: daysBetween(since, t) };
+				return {
+					id: r.id,
+					kind: r.kind,
+					name: r.name,
+					color: r.color,
+					company: r.company,
+					last_change_at: r.last_change_at,
+					since,
+					days: daysBetween(since, t),
+				};
 			})
-			.filter((r) => r.days >= STALE_DAYS)
+			.filter((r) => r.days >= limit[r.kind])
 			.sort((a, b) => b.days - a.days || a.name.localeCompare(b.name));
 	}
 

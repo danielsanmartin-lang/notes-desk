@@ -29,13 +29,20 @@ export function digestText(items, stale = [], deadlines = []) {
 		const list = deadlines.map(deadlineLabel);
 		parts.push(`RFPs: ${list.length > 3 ? `${list.slice(0, 3).join(', ')} y ${list.length - 3} más` : list.join(', ')}`);
 	}
-	if (stale.length) parts.push(`PoCs sin movimiento: ${names(stale.map((p) => ({ title: p.name })))}`);
+	const stalePocs = stale.filter((p) => p.kind !== 'rfp');
+	const staleRfps = stale.filter((p) => p.kind === 'rfp');
+	if (stalePocs.length) parts.push(`PoCs sin movimiento: ${names(stalePocs.map((p) => ({ title: p.name })))}`);
+	if (staleRfps.length) parts.push(`RFPs sin movimiento: ${names(staleRfps.map((p) => ({ title: p.name })))}`);
 	return {
 		title: items.length
 			? `Hoy: ${items.length} ${items.length === 1 ? 'pendiente' : 'pendientes'}`
 			: deadlines.length
 				? 'RFPs con entrega próxima'
-				: 'PoCs sin movimiento',
+				: stalePocs.length && staleRfps.length
+					? 'PoCs y RFPs sin movimiento'
+					: staleRfps.length
+						? 'RFPs sin movimiento'
+						: 'PoCs sin movimiento',
 		body: parts.join(' · '),
 	};
 }
