@@ -1,6 +1,7 @@
 import { Bell, Check, Database, FlaskConical, FolderOpen, Keyboard, Link2, Monitor, Moon, Palette, Power, ScrollText, Send, Settings, Snowflake, Sun } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
-import type { CSSProperties, ReactNode } from 'react';
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { toast } from 'sonner';
 import { THEMES } from '../../shared/themes.js';
 import { useActions, useHubspotStatus, useMeta, useSettings } from '../api/hooks';
 import { Chip } from '../components/bits';
@@ -9,7 +10,7 @@ import { Button, inputClass } from '../components/ui';
 import { isElectron, zd } from '../lib/bridge';
 import { cx } from '../lib/format';
 import { useMode, type Mode } from '../lib/theme';
-import type { Appearance } from '../api/types';
+import type { Appearance, Settings as SettingsData } from '../api/types';
 import { useListIds, ViewBody, ViewHeader } from './common';
 
 const SHORTCUTS = [
@@ -115,14 +116,50 @@ function AppearanceCard({ appearance, theme, onChange }: { appearance: Appearanc
 	);
 }
 
+/** Ajustes que esperan al botón Guardar. Aspecto y tema se aplican al momento; las tareas tienen su propio Guardar. */
+const DRAFT_KEYS = ['fup_days', 'poc_stale_days', 'rfp_stale_days', 'digest_time', 'shortcut', 'open_at_login'] as const;
+type DraftKey = (typeof DRAFT_KEYS)[number];
+type Draft = Partial<Pick<SettingsData, DraftKey>>;
+
 export function SettingsView() {
-	const { data: s } = useSettings();
+	const { data: saved } = useSettings();
 	const { data: meta } = useMeta();
 	const { data: hs } = useHubspotStatus();
 	const a = useActions();
 	const qc = useQueryClient();
+	const [draft, setDraft] = useState<Draft>({});
+	const [saving, setSaving] = useState(false);
+	const [justSaved, setJustSaved] = useState(false);
 	useListIds([]);
-	if (!s) return null;
+
+	useEffect(() => {
+		if (!justSaved) return;
+		const t = setTimeout(() => setJustSaved(false), 2500);
+		return () => clearTimeout(t);
+	}, [justSaved]);
+
+	if (!saved) return null;
+	// Lo que se ve: lo guardado con los cambios pendientes encima.
+	const s = { ...saved, ...draft };
+	const changes = Object.fromEntries(DRAFT_KEYS.filter((k) => k in draft && draft[k] !== saved[k]).map((k) => [k, draft[k]])) as Draft;
+	const dirty = Object.keys(changes).length > 0;
+	const set = (patch: Draft) => {
+		setJustSaved(false);
+		setDraft((d) => ({ ...d, ...patch }));
+	};
+	const save = async () => {
+		setSaving(true);
+		try {
+			await a.saveSettings(changes);
+			setDraft({});
+			setJustSaved(true);
+			toast.success('Ajustes guardados');
+		} catch {
+			// El error ya sale en un toast; los cambios se quedan pendientes.
+		} finally {
+			setSaving(false);
+		}
+	};
 
 	return (
 		<>
@@ -133,7 +170,7 @@ export function SettingsView() {
 					theme={s.theme}
 					onChange={(patch) => {
 						// Se ve al instante; el servidor lo guarda detrás.
-						qc.setQueryData(['settings'], { ...s, ...patch });
+						qc.setQueryData(['settings'], { ...saved, ...patch });
 						a.saveSettings(patch);
 					}}
 				/>
@@ -143,7 +180,7 @@ export function SettingsView() {
 						Volver a perseguir a los
 						<select
 							value={s.fup_days}
-							onChange={(e) => a.saveSettings({ fup_days: Number(e.target.value) })}
+							onChange={(e) => set({ fup_days: Number(e.target.value) })}
 							className={cx(inputClass, 'w-auto')}
 						>
 							{[1, 2, 3, 4, 5, 7, 10, 14].map((n) => (
@@ -159,7 +196,7 @@ export function SettingsView() {
 				<Card icon={<Bell />} title="Avisos" description="Un resumen con lo de hoy y los follow-ups que toca perseguir, más un aviso para cada tarea con recordatorio.">
 					<div className="flex items-center gap-2 text-[13px]">
 						Resumen diario a las
-						<input type="time" value={s.digest_time} onChange={(e) => e.target.value && a.saveSettings({ digest_time: e.target.value })} className={cx(inputClass, 'w-28')} />
+						<input type="time" value={s.digest_time} onChange={(e) => e.target.value && set({ digest_time: e.target.value })} className={cx(inputClass, 'w-28')} />
 					</div>
 					{!isElectron && <p className="mt-2 text-[11.5px] text-fg-3">Los avisos solo salen desde la app de escritorio.</p>}
 				</Card>
@@ -170,7 +207,7 @@ export function SettingsView() {
 							<button
 								key={o.value || 'off'}
 								type="button"
-								onClick={() => a.saveSettings({ shortcut: o.value })}
+								onClick={() => set({ shortcut: o.value })}
 								className={cx(
 									'h-8 rounded-lg px-3 text-[12.5px] font-medium transition-colors',
 									s.shortcut === o.value ? 'bg-accent text-accent-fg' : 'bg-hover text-fg-2 hover:text-fg',
@@ -187,7 +224,7 @@ export function SettingsView() {
 						<input
 							type="checkbox"
 							checked={s.open_at_login}
-							onChange={(e) => a.saveSettings({ open_at_login: e.target.checked })}
+							onChange={(e) => set({ open_at_login: e.target.checked })}
 							className="size-4 accent-[var(--accent)]"
 						/>
 						Abrir Notes Desk al iniciar sesión
@@ -208,7 +245,7 @@ export function SettingsView() {
 						).map(([key, label]) => (
 							<div key={key} className="flex items-center gap-2">
 								<span className="w-12">{label}</span>
-								<select value={s[key]} onChange={(e) => a.saveSettings({ [key]: Number(e.target.value) })} className={cx(inputClass, 'w-auto')}>
+								<select value={s[key]} onChange={(e) => set({ [key]: Number(e.target.value) })} className={cx(inputClass, 'w-auto')}>
 									{[...new Set([3, 5, 7, 10, 14, 21, 30, s[key]])]
 										.filter((n) => n > 0)
 										.sort((x, y) => x - y)
@@ -256,6 +293,31 @@ export function SettingsView() {
 					{meta?.version && <div className="mt-3 text-[11px] text-fg-3">Notes Desk {meta.version}</div>}
 				</Card>
 			</ViewBody>
+			<div className="shrink-0 border-t border-line bg-raised">
+				<div className="mx-auto flex max-w-[680px] items-center gap-3 px-8 py-3">
+					<span className="text-[12px] text-fg-3">
+						{dirty ? (
+							<span className="font-medium text-warn">Cambios sin guardar</span>
+						) : justSaved ? (
+							<span className="inline-flex items-center gap-1 text-accent-text">
+								<Check className="size-3.5" /> Guardado
+							</span>
+						) : (
+							'Los cambios se aplican al pulsar Guardar'
+						)}
+					</span>
+					<div className="ml-auto flex gap-2">
+						{dirty && (
+							<Button variant="ghost" onClick={() => setDraft({})} disabled={saving}>
+								Descartar
+							</Button>
+						)}
+						<Button variant="primary" onClick={save} disabled={!dirty || saving}>
+							{saving ? 'Guardando…' : 'Guardar'}
+						</Button>
+					</div>
+				</div>
+			</div>
 		</>
 	);
 }
