@@ -1,6 +1,6 @@
 // Avisos nativos: uno por cada tarea con recordatorio cuando llega su hora, y un resumen diario a la hora
-// de los ajustes con lo de hoy (incluidos los follow-ups que toca volver a perseguir, las PoCs sin movimiento y las
-// fechas límite de RFP de los próximos días).
+// de los ajustes con lo de hoy (incluidos los follow-ups que toca volver a perseguir, las PoCs y los deals sin
+// movimiento y las fechas límite de RFP de los próximos días).
 
 import { Notification } from 'electron';
 
@@ -17,7 +17,7 @@ const deadlineLabel = (d) => {
 	return `${d.name} (${what} ${when})`;
 };
 
-export function digestText(items, stale = [], deadlines = []) {
+export function digestText(items, stale = [], deadlines = [], deals = []) {
 	const chase = items.filter((i) => i.state === 'waiting');
 	const fups = items.filter((i) => i.state !== 'waiting' && i.category === 'followup');
 	const rest = items.filter((i) => i.state !== 'waiting' && i.category !== 'followup');
@@ -33,16 +33,15 @@ export function digestText(items, stale = [], deadlines = []) {
 	const staleRfps = stale.filter((p) => p.kind === 'rfp');
 	if (stalePocs.length) parts.push(`PoCs sin movimiento: ${names(stalePocs.map((p) => ({ title: p.name })))}`);
 	if (staleRfps.length) parts.push(`RFPs sin movimiento: ${names(staleRfps.map((p) => ({ title: p.name })))}`);
+	if (deals.length) parts.push(`Deals sin movimiento: ${names(deals.map((d) => ({ title: d.name })))}`);
+	const staleKinds = [stalePocs.length && 'PoCs', staleRfps.length && 'RFPs', deals.length && 'deals'].filter(Boolean);
+	const staleTitle = `${staleKinds.length > 1 ? `${staleKinds.slice(0, -1).join(', ')} y ${staleKinds.at(-1)}` : staleKinds[0] ?? 'PoCs'} sin movimiento`;
 	return {
 		title: items.length
 			? `Hoy: ${items.length} ${items.length === 1 ? 'pendiente' : 'pendientes'}`
 			: deadlines.length
 				? 'RFPs con entrega próxima'
-				: stalePocs.length && staleRfps.length
-					? 'PoCs y RFPs sin movimiento'
-					: staleRfps.length
-						? 'RFPs sin movimiento'
-						: 'PoCs sin movimiento',
+				: staleTitle.charAt(0).toUpperCase() + staleTitle.slice(1),
 		body: parts.join(' · '),
 	};
 }
@@ -83,8 +82,9 @@ export function startNotifications({ repo, onChange, actions }) {
 			const { items } = repo.listItems('today');
 			const stale = repo.stalePocs();
 			const deadlines = repo.rfpDeadlines();
-			if (items.length || stale.length || deadlines.length) {
-				show({ ...digestText(items, stale, deadlines), onClick: () => actions.showMain('today') });
+			const deals = repo.staleDeals();
+			if (items.length || stale.length || deadlines.length || deals.length) {
+				show({ ...digestText(items, stale, deadlines, deals), onClick: () => actions.showMain('today') });
 			}
 		}
 	}

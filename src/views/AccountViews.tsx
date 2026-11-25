@@ -1,7 +1,7 @@
 // Vista por cuenta: cada empresa con todo lo suyo (follow-ups, tareas, PoCs, contactos e historial).
 // Las cuentas no se dan de alta: salen de la empresa de cada tarea y de cada PoC.
 
-import { Building2, ChevronRight, ExternalLink, Hand, Hourglass, Link2, Mail, Search, Send, Timer } from 'lucide-react';
+import { Briefcase, Building2, ChevronRight, ExternalLink, Hand, Hourglass, Link2, Mail, Search, Send, Timer } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import { daysBetween, formatDay } from '../../shared/dates.js';
 import { fold } from '../../shared/quickparse.js';
@@ -9,6 +9,7 @@ import { useAccount, useAccounts, useActions, useToday } from '../api/hooks';
 import type { AccountSummary } from '../api/types';
 import { Chip, EmptyState, PocDot } from '../components/bits';
 import { Composer } from '../components/Composer';
+import { DealToggle } from '../components/DealToggle';
 import { Avatar } from '../components/PocDetails';
 import { DoneSection, Group, TaskList } from '../components/TaskList';
 import { Timeline } from '../components/Timeline';
@@ -47,6 +48,11 @@ function AccountRow({ account, today }: { account: AccountSummary; today: string
 			<div className="min-w-0 flex-1">
 				<div className="flex items-center gap-2">
 					<span className="truncate text-[13.5px] font-medium">{account.name}</span>
+					{account.deal_open && (
+						<Chip tone="accent" icon={<Briefcase />}>
+							Deal abierto
+						</Chip>
+					)}
 					{account.pocs.map((p) => (
 						<Chip key={p.id} tone="neutral" icon={<PocDot color={p.color} className="size-1.5" />}>
 							{p.kind === 'rfp' ? `RFP · ${p.name}` : p.name}
@@ -254,7 +260,15 @@ export function AccountView({ name }: { name: string }) {
 				icon={<Avatar name={data.name} color={accountColor(data.name)} size={32} />}
 				title={data.name}
 				subtitle={idleText(data.last_activity_at, today)}
-				right={<AccountHubspot name={data.name} url={data.hubspot_url} />}
+				right={
+					<div className="flex items-center gap-3">
+						<div className="flex items-center gap-1.5 text-[12px] text-fg-3">
+							<Briefcase className="size-3.5" /> Deal abierto
+							<DealToggle account={data.name} open={data.deal_open} />
+						</div>
+						<AccountHubspot name={data.name} url={data.hubspot_url} />
+					</div>
+				}
 			/>
 			<ViewBody>
 				<div className="mb-5 grid grid-cols-4 gap-2.5">

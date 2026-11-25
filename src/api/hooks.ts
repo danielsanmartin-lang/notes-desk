@@ -18,6 +18,7 @@ import type {
 	RfpDeadline,
 	PocDocument,
 	Settings,
+	StaleDeal,
 	StalePoc,
 	Stats,
 	Suggestions,
@@ -50,6 +51,7 @@ export const useDocuments = (pocId: number, enabled = true) =>
 		staleTime: 0,
 	});
 export const useStalePocs = () => useQuery({ queryKey: ['stale-pocs'], queryFn: () => api<StalePoc[]>('/pocs/stale') });
+export const useStaleDeals = () => useQuery({ queryKey: ['stale-deals'], queryFn: () => api<StaleDeal[]>('/deals/stale') });
 export const useAccounts = () => useQuery({ queryKey: ['accounts'], queryFn: () => api<AccountSummary[]>('/accounts') });
 export const useAccount = (name: string) =>
 	useQuery({
@@ -165,6 +167,10 @@ export function useActions() {
 				run(api(`/pocs/${pocId}/documents/${encodeURIComponent(name)}`, { method: 'DELETE' })),
 			setAccountHubspot: (name: string, hubspot: string | null) =>
 				run(api(`/accounts/${encodeURIComponent(name)}/hubspot`, { method: 'PUT', body: { hubspot } })),
+			/** Marca o desmarca que hay un deal abierto con la cuenta. */
+			setAccountDeal: (name: string, open: boolean) =>
+				run(api(`/accounts/${encodeURIComponent(name)}/deal`, { method: 'PUT', body: { open } })),
+			snoozeStaleDeal: (name: string, until: string | null) => post(`/accounts/${encodeURIComponent(name)}/deal-snooze`, { until }),
 			saveSettings: (patch: Partial<Settings>) => run(api<Settings>('/settings', { method: 'PATCH', body: patch })),
 		};
 	}, [qc]);

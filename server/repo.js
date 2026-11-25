@@ -41,6 +41,8 @@ export const DEFAULT_SETTINGS = {
 	// Días sin nada nuevo a partir de los cuales una PoC / RFP en curso sale como «sin movimiento». 0 = no avisar.
 	poc_stale_days: 7,
 	rfp_stale_days: 7,
+	// Lo mismo para las cuentas con deal abierto.
+	deal_stale_days: 7,
 	digest_time: '09:00',
 	shortcut: 'Alt+Space',
 	open_at_login: false,
@@ -69,6 +71,8 @@ const ITEM_SELECT = `
 	       par.title AS parent_title,
 	       (SELECT acc.hubspot_url FROM accounts acc
 	         WHERE acc.key = trim(fold(coalesce(nullif(i.company, ''), p.company)))) AS account_hubspot_url,
+	       EXISTS (SELECT 1 FROM account_deals d
+	         WHERE d.key = trim(fold(coalesce(nullif(i.company, ''), p.company)))) AS account_deal_open,
 	       (SELECT COUNT(*) FROM items s WHERE s.parent_id = i.id AND s.deleted_at IS NULL) AS sub_total,
 	       (SELECT COUNT(*) FROM items s WHERE s.parent_id = i.id AND s.deleted_at IS NULL AND s.state = 'done') AS sub_done
 	FROM items i
@@ -120,7 +124,7 @@ function parseAmount(v) {
 
 const pick = (obj, keys) => Object.fromEntries(keys.map((k) => [k, obj[k]]));
 
-const itemOut = (row) => row && { ...row, flagged: !!row.flagged };
+const itemOut = (row) => row && { ...row, flagged: !!row.flagged, account_deal_open: !!row.account_deal_open };
 /** Días de antelación con los que una fecha límite de RFP sale en Inicio. */
 export const RFP_DAYS = 7;
 
@@ -200,7 +204,7 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 				const n = Number(v);
 				if (!Number.isInteger(n) || n < 1 || n > 60) throw bad('El intervalo de follow-up va de 1 a 60 días');
 				clean[k] = n;
-			} else if (k === 'poc_stale_days' || k === 'rfp_stale_days') {
+			} else if (k === 'poc_stale_days' || k === 'rfp_stale_days' || k === 'deal_stale_days') {
 				const n = Number(v);
 				if (!Number.isInteger(n) || n < 0 || n > 90) throw bad('El aviso de inactividad va de 1 a 90 días (0 = no avisar)');
 				clean[k] = n;
@@ -1162,6 +1166,8 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 					touches_30d: 0,
 					hubspot_company_id: null,
 					hubspot_url: null,
+					deal_open: false,
+					deal_opened_at: null,
 				});
 			}
 			return acc.get(key);
@@ -1200,6 +1206,10 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 		for (const r of all('SELECT key, hubspot_company_id, hubspot_url FROM accounts')) {
 			const e = acc.get(r.key);
 			if (e) Object.assign(e, { hubspot_company_id: r.hubspot_company_id, hubspot_url: r.hubspot_url });
+		}
+		for (const r of all('SELECT key, opened_at FROM account_deals')) {
+			const e = acc.get(r.key);
+			if (e) Object.assign(e, { deal_open: true, deal_opened_at: r.opened_at });
 		}
 		const open = (e) => e.followups + e.waiting + e.tasks + e.poc_items;
 		return [...acc.values()].sort(
@@ -1287,6 +1297,76 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 			{ key, name: summary.name, id: ref.companyId, url, t: ts() },
 		);
 		return { ...summary, hubspot_company_id: ref.companyId, hubspot_url: url };
+	}
+
+	// ── Deals abiertos ─────────────────────────────────────────────────────────
+
+	/** Marca (o desmarca) que hay un deal abierto con la cuenta de `name`. Volver a marcarlo no reinicia la fecha. */
+	function setAccountDeal(name, open) {
+		const key = fold(name).trim();
+		if (!key) throw bad('Falta la empresa');
+		if (open) {
+			run(
+				`INSERT INTO account_deals (key, name, opened_at) VALUES (@key, @name, @t)
+				 ON CONFLICT (key) DO UPDATE SET name = excluded.name`,
+				{ key, name: accountNames().get(key) ?? String(name).trim(), t: ts() },
+			);
+		} else {
+			run('DELETE FROM account_deals WHERE key = @key', { key });
+		}
+		const row = get('SELECT * FROM account_deals WHERE key = @key', { key });
+		return { key, deal_open: !!row, deal_opened_at: row?.opened_at ?? null };
+	}
+
+	/**
+	 * Cuentas con deal abierto que llevan deal_stale_days (Ajustes) o más sin nada nuevo en la cuenta: ni tarea o
+	 * follow-up creado, ni toque, respuesta, nota o completada, en sus tareas, sus PoCs o sus notas sueltas.
+	 * Reprogramar no cuenta. Cuenta desde que se marcó el deal, si es posterior; las silenciadas no salen hasta la
+	 * fecha elegida. Con 0 días, no avisa.
+	 */
+	function staleDeals() {
+		const t = today();
+		const limit = getSettings().deal_stale_days;
+		if (!(limit > 0)) return [];
+		const deals = all('SELECT key, name, opened_at, snoozed_until FROM account_deals');
+		if (!deals.length) return [];
+		const last = new Map(
+			all(
+				`SELECT trim(fold(coalesce(nullif(i.company, ''), pi.company, nullif(par.company, ''), pa.company, a.company))) AS k,
+				        max(a.occurred_at) AS last
+				 FROM activity a LEFT JOIN items i ON i.id = a.item_id LEFT JOIN items par ON par.id = i.parent_id
+				 LEFT JOIN pocs pi ON pi.id = i.poc_id LEFT JOIN pocs pa ON pa.id = a.poc_id
+				 WHERE a.kind IN ('created', 'touch', 'reply', 'note', 'done', 'resumed') AND (i.id IS NULL OR i.deleted_at IS NULL)
+				 GROUP BY k`,
+			).map((r) => [r.k, r.last]),
+		);
+		const names = accountNames();
+		return deals
+			.filter((d) => !(d.snoozed_until && d.snoozed_until > t))
+			.map((d) => {
+				const lastChange = last.get(d.key) ?? null;
+				const since = [lastChange, d.opened_at].filter(Boolean).map((x) => x.slice(0, 10)).sort().at(-1);
+				return {
+					key: d.key,
+					name: names.get(d.key) ?? d.name,
+					opened_at: d.opened_at,
+					last_change_at: lastChange,
+					since,
+					days: daysBetween(since, t),
+				};
+			})
+			.filter((d) => d.days >= limit)
+			.sort((a, b) => b.days - a.days || a.name.localeCompare(b.name));
+	}
+
+	/** Silencia el aviso de un deal sin movimiento hasta `until` (o lo reactiva, con null). */
+	function snoozeStaleDeal(name, until) {
+		const key = fold(name).trim();
+		if (!get('SELECT 1 AS x FROM account_deals WHERE key = @key', { key })) throw notFound('El deal');
+		const u = emptyToNull(until);
+		if (u && !isValidDate(u)) throw bad('Fecha no válida');
+		run('UPDATE account_deals SET snoozed_until = @u WHERE key = @key', { key, u });
+		return { key, snoozed_until: u };
 	}
 
 	// ── Estadísticas ───────────────────────────────────────────────────────────
@@ -1616,6 +1696,9 @@ export function createRepo(db, { now = () => new Date() } = {}) {
 		listAccounts,
 		getAccount,
 		setAccountHubspot,
+		setAccountDeal,
+		staleDeals,
+		snoozeStaleDeal,
 		stats,
 		applyHubspotDeal,
 		listWeeks,

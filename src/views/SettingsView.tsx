@@ -117,7 +117,7 @@ function AppearanceCard({ appearance, theme, onChange }: { appearance: Appearanc
 }
 
 /** Ajustes que esperan al botón Guardar. Aspecto y tema se aplican al momento; las tareas tienen su propio Guardar. */
-const DRAFT_KEYS = ['fup_days', 'poc_stale_days', 'rfp_stale_days', 'digest_time', 'shortcut', 'open_at_login'] as const;
+const DRAFT_KEYS = ['fup_days', 'poc_stale_days', 'rfp_stale_days', 'deal_stale_days', 'digest_time', 'shortcut', 'open_at_login'] as const;
 type DraftKey = (typeof DRAFT_KEYS)[number];
 type Draft = Partial<Pick<SettingsData, DraftKey>>;
 
@@ -233,14 +233,15 @@ export function SettingsView() {
 
 				<Card
 					icon={<Snowflake />}
-					title="PoCs y RFPs sin movimiento"
-					description="Inicio y el resumen diario avisan de las PoCs y RFPs en curso que llevan estos días sin nada nuevo (ni tarea, follow-up, toque, respuesta ni nota)."
+					title="PoCs, RFPs y deals sin movimiento"
+					description="Inicio y el resumen diario avisan de las PoCs y RFPs en curso, y de las cuentas con deal abierto, que llevan estos días sin nada nuevo (ni tarea, follow-up, toque, respuesta ni nota)."
 				>
 					<div className="space-y-2 text-[13px]">
 						{(
 							[
 								['poc_stale_days', 'PoCs'],
 								['rfp_stale_days', 'RFPs'],
+								['deal_stale_days', 'Deals'],
 							] as const
 						).map(([key, label]) => (
 							<div key={key} className="flex items-center gap-2">

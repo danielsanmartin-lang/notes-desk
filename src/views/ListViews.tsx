@@ -7,6 +7,7 @@ import type { Item } from '../api/types';
 import { Chip, EmptyState } from '../components/bits';
 import { Composer } from '../components/Composer';
 import { RfpDeadlinesGroup } from '../components/RfpDeadlines';
+import { StaleDealsGroup } from '../components/StaleDeals';
 import { StalePocsGroup } from '../components/StalePocs';
 import { DoneSection, Group, TaskList } from '../components/TaskList';
 import { Button, Confirm, Kbd } from '../components/ui';
@@ -127,6 +128,7 @@ export function TodayView() {
 						)}
 						<RfpDeadlinesGroup today={today} />
 						<StalePocsGroup today={today} />
+						<StaleDealsGroup today={today} />
 						{chase.length > 0 && (
 							<Group title="Toca volver a perseguir" icon={<AlarmClock />} count={chase.length} tone="warn">
 								<TaskList items={chase} today={today} options={opts} />

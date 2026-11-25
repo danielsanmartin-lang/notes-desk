@@ -146,6 +146,9 @@ export function startServer({ repo, documents = null, port = 0, token = null, st
 	r.get('/accounts', (req, res) => res.json(repo.listAccounts()));
 	r.get('/accounts/:name', (req, res) => res.json(repo.getAccount(req.params.name)));
 	r.put('/accounts/:name/hubspot', (req, res) => res.json(repo.setAccountHubspot(req.params.name, req.body?.hubspot)));
+	r.put('/accounts/:name/deal', (req, res) => res.json(repo.setAccountDeal(req.params.name, !!req.body?.open)));
+	r.post('/accounts/:name/deal-snooze', (req, res) => res.json(repo.snoozeStaleDeal(req.params.name, req.body?.until ?? null)));
+	r.get('/deals/stale', (req, res) => res.json(repo.staleDeals()));
 	r.get('/stats', (req, res) => res.json(repo.stats(req.query.weeks, req.query.region)));
 	r.get('/weeks', (req, res) => res.json(repo.listWeeks()));
 	r.get('/weeks/:week', (req, res) => res.json(repo.getWeek(req.params.week)));

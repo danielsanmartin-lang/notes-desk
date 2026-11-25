@@ -42,6 +42,8 @@ export interface Item {
 	parent_title: string | null;
 	/** Enlace a la empresa en HubSpot de la cuenta de la tarea (su empresa o la de su PoC). */
 	account_hubspot_url: string | null;
+	/** Si la cuenta de la tarea (su empresa o la de su PoC) tiene un deal abierto. */
+	account_deal_open: boolean;
 	/** Solo en el buscador: trozo de nota o del historial donde aparece lo buscado. */
 	snippet?: string | null;
 	sub_total: number;
@@ -229,6 +231,8 @@ export interface Settings {
 	/** Días sin nada nuevo para avisar de una PoC / RFP en curso. 0 = no avisar. */
 	poc_stale_days: number;
 	rfp_stale_days: number;
+	/** Días sin nada nuevo para avisar de una cuenta con deal abierto. 0 = no avisar. */
+	deal_stale_days: number;
 	digest_time: string;
 	shortcut: string;
 	open_at_login: boolean;
@@ -253,6 +257,9 @@ export interface AccountSummary {
 	touches_30d: number;
 	hubspot_company_id: string | null;
 	hubspot_url: string | null;
+	/** Hay un deal abierto con esta cuenta (y desde cuándo está marcado). */
+	deal_open: boolean;
+	deal_opened_at: string | null;
 }
 
 export interface AccountDetail extends AccountSummary {
@@ -322,6 +329,17 @@ export interface StalePoc {
 	company: string | null;
 	last_change_at: string | null;
 	/** Fecha desde la que se cuenta: el último cambio, su creación o su fecha de inicio. */
+	since: string;
+	days: number;
+}
+
+/** Cuenta con deal abierto sin nada nuevo desde hace `days` días. */
+export interface StaleDeal {
+	key: string;
+	name: string;
+	opened_at: string;
+	last_change_at: string | null;
+	/** Fecha desde la que se cuenta: el último cambio en la cuenta o cuándo se marcó el deal. */
 	since: string;
 	days: number;
 }

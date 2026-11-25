@@ -232,7 +232,7 @@ test('migración 012: rehacer la tabla de PoCs no borra sus tareas, contactos ni
 	const before = ['items', 'poc_admins', 'activity', 'pocs'].map(count);
 	db.pragma('user_version = 11');
 	migrate(db);
-	assert.equal(db.pragma('user_version', { simple: true }), 12);
+	assert.equal(db.pragma('user_version', { simple: true }), 13);
 	assert.deepEqual(['items', 'poc_admins', 'activity', 'pocs'].map(count), before);
 	assert.equal(db.pragma('foreign_keys', { simple: true }), 1, 'las claves foráneas vuelven a estar activas');
 	assert.equal(r.getPoc(poc.id).poc.partner, 'Accenture');
@@ -448,6 +448,46 @@ test('PoCs sin movimiento: 7 días sin nada nuevo en la PoC o su cuenta; reprogr
 	assert.deepEqual(repo.stalePocs().map((p) => p.name), ['Cafam', 'EDP']);
 	repo.setPocStatus(cafam.id, { status: 'paused' });
 	assert.deepEqual(repo.stalePocs().map((p) => p.name), ['EDP']);
+});
+
+test('deals sin movimiento: se marcan en la cuenta desde cualquier tarea y avisan tras 7 días quietos', () => {
+	const t = repo.createItem({ category: 'followup', title: 'FUP propuesta', company: 'Grupo Hedisa' });
+	const poc = repo.createPoc({ name: 'Simon Electric (TRC)', company: 'Simon Electric' });
+	const pt = repo.createItem({ category: 'poc', poc_id: poc.id, title: 'FUP si no contesta Victor' });
+	assert.equal(repo.getItem(t.id).item.account_deal_open, false);
+
+	repo.setAccountDeal('grupo hedisa', true);
+	repo.setAccountDeal('Simon Electric', true);
+	assert.equal(repo.getItem(t.id).item.account_deal_open, true, 'la tarea ve el deal de su cuenta');
+	assert.equal(repo.getItem(pt.id).item.account_deal_open, true, 'y la de una PoC, el de la empresa de la PoC');
+	assert.equal(repo.listAccounts().find((x) => x.key === 'grupo hedisa').deal_open, true);
+	assert.deepEqual(repo.staleDeals(), []);
+
+	at('2026-11-02T09:00:00'); // 7 días después
+	assert.deepEqual(repo.staleDeals().map((d) => [d.name, d.days]), [['Grupo Hedisa', 7], ['Simon Electric', 7]]);
+	repo.updateItem(t.id, { due_date: '2026-11-05' }); // reprogramar no es movimiento
+	repo.completeItem(t.id); // completar sí, y el deal sigue aunque la tarea esté hecha
+	assert.deepEqual(repo.staleDeals().map((d) => d.name), ['Simon Electric']);
+	repo.touchItem(pt.id, {}); // un toque en la PoC cuenta para la cuenta
+	assert.deepEqual(repo.staleDeals(), []);
+
+	at('2026-11-10T09:00:00');
+	assert.deepEqual(repo.staleDeals().map((d) => [d.name, d.days]), [['Grupo Hedisa', 8], ['Simon Electric', 8]]);
+	repo.snoozeStaleDeal('Grupo Hedisa', '2026-11-17');
+	assert.deepEqual(repo.staleDeals().map((d) => d.name), ['Simon Electric']);
+	repo.addNote({ company: 'simon electric', body: 'Nota suelta' });
+	assert.deepEqual(repo.staleDeals(), []);
+	at('2026-11-17T09:00:00'); // vuelve el silenciado, y la nota de hace 7 días ya no basta
+	assert.deepEqual(repo.staleDeals().map((d) => d.name), ['Grupo Hedisa', 'Simon Electric']);
+	repo.setAccountDeal('Grupo Hedisa', false);
+	assert.deepEqual(repo.staleDeals().map((d) => d.name), ['Simon Electric']);
+	assert.equal(repo.getItem(t.id).item.account_deal_open, false);
+	assert.throws(() => repo.snoozeStaleDeal('Grupo Hedisa', '2026-11-24'), /no existe/);
+
+	repo.setAccountDeal('Nueva', true);
+	repo.setSettings({ deal_stale_days: 0 });
+	at('2026-12-30T09:00:00');
+	assert.deepEqual(repo.staleDeals(), [], 'con 0 días no avisa');
 });
 
 test('estadísticas del periodo: totales, respuesta, espera y canales', () => {

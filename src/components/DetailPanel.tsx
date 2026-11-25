@@ -4,6 +4,7 @@ import {
 	ChevronRight,
 	ListChecks,
 	Bell,
+	Briefcase,
 	Building2,
 	CalendarDays,
 	Copy,
@@ -35,6 +36,7 @@ import { isOpenPoc, partnerOf } from '../lib/pocs';
 import { useUI } from '../lib/store';
 import { Checkbox, DueChip, PocDot, WaitingChip } from './bits';
 import { DatePicker, ReminderPicker } from './DatePicker';
+import { DealToggle } from './DealToggle';
 import { ChannelPicker, ReplyForm, TouchForm } from './FollowupForms';
 import { Timeline } from './Timeline';
 import { AutoTextarea, Button, IconButton, inputClass, Menu, MenuItem, MenuLabel, Popover, SectionTitle, useDraft } from './ui';
@@ -127,6 +129,7 @@ function DetailBody({
 	const activePocs = pocs.filter(isOpenPoc);
 	const pocCompany = pocs.find((p) => p.id === item.poc_id)?.company ?? null;
 	const partner = partnerOf(pocs, item);
+	const account = item.company?.trim() || pocCompany?.trim() || null;
 
 	const addNote = async () => {
 		if (!noteText.trim()) return;
@@ -359,6 +362,18 @@ function DetailBody({
 								</button>
 							)}
 						</div>
+					</Row>
+					<Row icon={<Briefcase />} label="Deal abierto">
+						{account ? (
+							<div className="flex min-w-0 items-center gap-2">
+								<DealToggle account={account} open={item.account_deal_open} />
+								<span className="truncate text-[11.5px] text-fg-3" title={`Se guarda en la cuenta ${account}, no solo en esta tarea`}>
+									en {account}
+								</span>
+							</div>
+						) : (
+							<span className="px-2 text-[12.5px] text-fg-3">Añade una empresa para marcarlo</span>
+						)}
 					</Row>
 					<Row icon={<User />} label="Contacto">
 						<input {...contact} list="zd-contacts" placeholder="Añadir contacto" className={fieldClass} />
